@@ -1,0 +1,228 @@
+# ============================================
+# SIEM Platform - Docker Compose
+# ============================================
+# Brings up the entire infrastructure for local development.
+# Usage:
+#   docker compose up -d        # Start all services in background
+#   docker compose logs -f      # Follow logs from all services
+#   docker compose down         # Stop and remove containers
+#   docker compose down -v      # Also remove volumes (clean slate)
+
+name: siem-platform
+
+services:
+
+  # ----------------------------------------
+  # INFRASTRUCTURE
+  # ----------------------------------------
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: siem-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/postgres:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - siem-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: siem-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - siem-net
+
+  # ----------------------------------------
+  # LOG SOURCES
+  # ----------------------------------------
+
+  demo-webapp:
+    build:
+      context: ./log-sources/demo-webapp
+      dockerfile: Dockerfile
+    container_name: siem-demo-webapp
+    restart: unless-stopped
+    environment:
+      DEMO_WEBAPP_SECRET_KEY: ${DEMO_WEBAPP_SECRET_KEY}
+    ports:
+      - "${DEMO_WEBAPP_PORT}:9000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9000/health').read()"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    networks:
+      - siem-net
+
+  nginx:
+    build:
+      context: ./log-sources/nginx
+      dockerfile: Dockerfile
+    container_name: siem-nginx
+    restart: unless-stopped
+    ports:
+      - "${NGINX_HTTP_PORT}:80"
+    volumes:
+      - nginx_logs:/var/log/nginx
+    depends_on:
+      demo-webapp:
+        condition: service_healthy
+    networks:
+      - siem-net
+
+  # ----------------------------------------
+  # SIEM SERVICES (uncomment as we build them)
+  # ----------------------------------------
+
+  # ingestor:
+  #   build:
+  #     context: ./services/ingestor
+  #     dockerfile: Dockerfile
+  #   container_name: siem-ingestor
+  #   restart: unless-stopped
+  #   environment:
+  #     POSTGRES_HOST: ${POSTGRES_HOST}
+  #     POSTGRES_PORT: ${POSTGRES_PORT}
+  #     POSTGRES_USER: ${POSTGRES_USER}
+  #     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+  #     POSTGRES_DB: ${POSTGRES_DB}
+  #     REDIS_HOST: ${REDIS_HOST}
+  #     REDIS_PORT: ${REDIS_PORT}
+  #   ports:
+  #     - "${INGESTOR_PORT}:8001"
+  #   volumes:
+  #     - nginx_logs:/var/log/nginx:ro
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   networks:
+  #     - siem-net
+
+  # normalizer:
+  #   build:
+  #     context: ./services/normalizer
+  #     dockerfile: Dockerfile
+  #   container_name: siem-normalizer
+  #   restart: unless-stopped
+  #   environment:
+  #     POSTGRES_HOST: ${POSTGRES_HOST}
+  #     REDIS_HOST: ${REDIS_HOST}
+  #   ports:
+  #     - "${NORMALIZER_PORT}:8002"
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   networks:
+  #     - siem-net
+
+  # correlator:
+  #   build:
+  #     context: ./services/correlator
+  #     dockerfile: Dockerfile
+  #   container_name: siem-correlator
+  #   restart: unless-stopped
+  #   environment:
+  #     POSTGRES_HOST: ${POSTGRES_HOST}
+  #     REDIS_HOST: ${REDIS_HOST}
+  #   ports:
+  #     - "${CORRELATOR_PORT}:8003"
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   networks:
+  #     - siem-net
+
+  # alert-manager:
+  #   build:
+  #     context: ./services/alert-manager
+  #     dockerfile: Dockerfile
+  #   container_name: siem-alert-manager
+  #   restart: unless-stopped
+  #   environment:
+  #     POSTGRES_HOST: ${POSTGRES_HOST}
+  #     REDIS_HOST: ${REDIS_HOST}
+  #     ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL}
+  #   ports:
+  #     - "${ALERT_MANAGER_PORT}:8004"
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   networks:
+  #     - siem-net
+
+  # api-gateway:
+  #   build:
+  #     context: ./services/api-gateway
+  #     dockerfile: Dockerfile
+  #   container_name: siem-api-gateway
+  #   restart: unless-stopped
+  #   environment:
+  #     POSTGRES_HOST: ${POSTGRES_HOST}
+  #     REDIS_HOST: ${REDIS_HOST}
+  #   ports:
+  #     - "${API_GATEWAY_PORT}:8000"
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #   networks:
+  #     - siem-net
+
+  # frontend:
+  #   build:
+  #     context: ./frontend
+  #     dockerfile: Dockerfile
+  #   container_name: siem-frontend
+  #   restart: unless-stopped
+  #   environment:
+  #     VITE_API_URL: ${VITE_API_URL}
+  #   ports:
+  #     - "${FRONTEND_PORT}:3000"
+  #   depends_on:
+  #     - api-gateway
+  #   networks:
+  #     - siem-net
+
+
+# ----------------------------------------
+# NETWORKS & VOLUMES
+# ----------------------------------------
+
+networks:
+  siem-net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  nginx_logs:
