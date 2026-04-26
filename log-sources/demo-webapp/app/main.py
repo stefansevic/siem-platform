@@ -13,14 +13,17 @@ This is intentionally vulnerable for SIEM testing purposes:
 DO NOT use this code in production.
 """
 
+import asyncio
 import json
 import logging
+import os
 import sys
 import time
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
+import httpx
 from fastapi import FastAPI, Form, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -44,6 +47,10 @@ class JSONFormatter(logging.Formatter):
         if hasattr(record, "event_data") and isinstance(record.event_data, dict):
             log_obj.update(record.event_data)
 
+        # Forward to Ingestor (fire-and-forget, no await)
+        if record.name == "demo-webapp":
+            _ship_event(log_obj)
+
         return json.dumps(log_obj, ensure_ascii=False)
 
 
@@ -53,6 +60,57 @@ _handler.setFormatter(JSONFormatter())
 logging.basicConfig(level=logging.INFO, handlers=[_handler], force=True)
 
 logger = logging.getLogger("demo-webapp")
+
+# ============================================
+# Forwarder: send each event to the SIEM Ingestor
+# ============================================
+
+INGESTOR_URL = os.getenv("INGESTOR_URL", "http://ingestor:8001/logs")
+INGESTOR_TIMEOUT = float(os.getenv("INGESTOR_TIMEOUT_SECONDS", "1.0"))
+
+_http_client: Optional[httpx.AsyncClient] = None
+
+
+async def _forward_to_ingestor(event: dict) -> None:
+    """
+    Fire-and-forget shipment of a structured event to the Ingestor.
+
+    Failures are logged but never raised: the demo webapp must remain
+    responsive even if the SIEM is down.
+    """
+    global _http_client
+    if _http_client is None:
+        return  # not yet initialized
+
+    try:
+        await _http_client.post(
+            INGESTOR_URL,
+            json=event,
+            headers={"X-Log-Source": "demo-webapp"},
+            timeout=INGESTOR_TIMEOUT,
+        )
+    except Exception as exc:
+        # Don't use logger here -- avoid recursive forwarding
+        print(
+            json.dumps({
+                "level": "WARN",
+                "logger": "forwarder",
+                "message": "ingestor_forward_failed",
+                "error": str(exc),
+            }),
+            file=sys.stdout,
+            flush=True,
+        )
+
+
+def _ship_event(event: dict) -> None:
+    """Schedule a forward without awaiting it."""
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(_forward_to_ingestor(event))
+    except RuntimeError:
+        # No running loop yet (e.g., during early init) -- skip
+        pass
 
 
 # ============================================
@@ -240,3 +298,27 @@ async def admin_panel(request: Request, session_id: Optional[str] = None):
         raise HTTPException(status_code=403, detail="Admin access required")
 
     return {"panel": "admin", "users_count": len(USERS)}
+
+    # ============================================
+# Lifecycle: initialize HTTP client at startup
+# ============================================
+
+@app.on_event("startup")
+async def _on_startup() -> None:
+    global _http_client
+    _http_client = httpx.AsyncClient()
+    logger.info(
+        "demo_webapp_started",
+        extra={"event_data": {
+            "event_type": "lifecycle",
+            "ingestor_url": INGESTOR_URL,
+        }},
+    )
+
+
+@app.on_event("shutdown")
+async def _on_shutdown() -> None:
+    global _http_client
+    if _http_client is not None:
+        await _http_client.aclose()
+        _http_client = None

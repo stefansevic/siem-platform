@@ -65,7 +65,9 @@ services:
     container_name: siem-demo-webapp
     restart: unless-stopped
     environment:
-      DEMO_WEBAPP_SECRET_KEY: ${DEMO_WEBAPP_SECRET_KEY}
+          DEMO_WEBAPP_SECRET_KEY: ${DEMO_WEBAPP_SECRET_KEY}
+          INGESTOR_URL: http://ingestor:8001/logs
+          INGESTOR_TIMEOUT_SECONDS: "1.0"
     ports:
       - "${DEMO_WEBAPP_PORT}:9000"
     healthcheck:
