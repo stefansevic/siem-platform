@@ -148,6 +148,62 @@ and verify the project boots cleanly on macOS at the end of week 4.
 
 ---
 
+---
+
+## ADR-008: "Dumb Ingestor" pattern — no parsing or validation in the entry point
+
+**Date:** 2026-04-26
+
+**Context:** The Ingestor is the first component touching every log
+that enters the system. Two design philosophies are possible:
+either parse and validate at the entry point, or forward raw data
+unchanged and parse downstream.
+
+**Decision:** Adopt the "dumb pipe" pattern. The Ingestor performs no
+parsing, validation, schema enforcement, or filtering on payloads.
+It only attaches metadata (source identifier, format hint, receive
+timestamp) and publishes the raw bytes to the Redis stream `raw_logs`.
+
+**Consequences:**
+- ✅ The Ingestor is fast: a single log entry costs only a JSON encode
+  and a Redis XADD.
+- ✅ The Ingestor is robust: parser bugs in downstream services cannot
+  crash the entry point or cause log loss; bad logs sit in the stream
+  and can be reprocessed once the parser is fixed.
+- ✅ The Ingestor and Normalizer scale independently. Operators can run
+  3 Ingestor replicas behind a load balancer if intake spikes, or 5
+  Normalizer replicas if parsing becomes the bottleneck.
+- ✅ Aligns with industry practice: Logstash, Fluent Bit, Vector,
+  Splunk Universal Forwarder, AWS Kinesis Agent — all follow the
+  "ship raw, parse later" pattern.
+- ⚠️ One edge of complexity moves downstream: the Normalizer must
+  defend against malformed or hostile inputs that the Ingestor would
+  otherwise have rejected.
+
+---
+
+## ADR-009: Push and pull ingestion in a single service
+
+**Date:** 2026-04-26
+
+**Context:** The platform must accept logs from two source styles
+without coupling source services to a specific ingestion mechanism.
+
+**Decision:** The Ingestor exposes both a **push** path (HTTP
+`POST /logs` for applications that emit JSON) and a **pull** path
+(file tailer for the Nginx access log) inside the same service.
+
+**Consequences:**
+- ✅ Application services like the demo webapp ship logs synchronously
+  via fire-and-forget HTTP without any disk involvement.
+- ✅ Legacy or third-party components like Nginx, which only know how
+  to write to a file, are still ingested without modification.
+- ✅ Both paths converge on the same `RawLogMessage` shape, so the
+  Normalizer downstream remains source-agnostic.
+- ⚠️ The file tailer assumes Nginx writes to a real file, not the
+  default `/dev/stdout` symlink — this required a small Dockerfile
+  customization and is documented in the runbook.
+
 ## Future decisions (placeholder)
 
 Records added during weeks 2–10 will appear below as the system grows:
