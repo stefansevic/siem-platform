@@ -140,4 +140,4 @@ dumps/
 
 # Simulation outputs
 simulations/output/
-simulations/results/
+simulations/results/.venv*/
