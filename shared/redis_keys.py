@@ -9,6 +9,7 @@ consumes from "raw-logs").
 # Streams (Redis Streams API)
 STREAM_RAW_LOGS = "raw_logs"
 STREAM_NORMALIZED_EVENTS = "normalized_events"
+STREAM_DEAD_LETTER = "dead_letter_logs"  # Malformed payloads quarantined here for forensic analysis
 
 # Consumer groups
 GROUP_NORMALIZER = "normalizer-group"
