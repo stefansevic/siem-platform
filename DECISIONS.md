@@ -204,6 +204,119 @@ without coupling source services to a specific ingestion mechanism.
   default `/dev/stdout` symlink — this required a small Dockerfile
   customization and is documented in the runbook.
 
+---
+
+## ADR-010: Layered Normalizer architecture with pure-function core
+
+**Date:** 2026-04-27
+
+**Context:** The Normalizer is the most complex service in the platform: it
+parses two distinct log formats, maps them to ECS, persists to Postgres,
+and republishes to a downstream stream. A naive implementation would
+intertwine I/O and business logic, making the service hard to test and
+hard to evolve.
+
+**Decision:** Split the Normalizer into a layered architecture where the
+core normalization logic is composed of pure, I/O-free functions:
+
+- **`parsers.py`** — `parse_nginx_siem_combined()` and
+  `parse_demo_webapp_json()` take a payload string and return a
+  `ParsedFields` dataclass. No Redis, no Postgres, no network.
+- **`mapper.py`** — `normalize()` composes a parser with a deterministic
+  mapping from `ParsedFields` to `ECSEvent`. Still I/O-free.
+- **`idempotency.py`** — `compute_idempotency_key()` returns a SHA-256
+  hex digest of the raw envelope. Pure function.
+- **`db.py`** — async SQLAlchemy `EventWriter`, the only Postgres I/O.
+- **`redis_consumer.py`** — `NormalizerConsumer`, the only Redis I/O.
+- **`main.py`** — orchestration, lifecycle, signal handling.
+
+**Consequences:**
+- ✅ 49 unit tests for parsers, mapper, and idempotency run in ~0.05s
+  without any container, giving instant feedback during development.
+- ✅ Integration tests for the I/O layer (db.py, redis_consumer.py) are
+  small and focused; they do not have to re-test parsing semantics.
+- ✅ Replacing the storage backend (e.g. Elasticsearch as a stretch goal)
+  only changes `db.py`; parsing and mapping are untouched.
+- ✅ The boundary makes the service understandable to a reader following
+  the data flow top-down: payload → ParsedFields → ECSEvent → DB row.
+- ⚠️ Slightly more files than a monolithic `normalizer.py`; trivial
+  navigation cost compared to the testing and refactoring benefits.
+
+---
+
+## ADR-011: Dead-letter stream for malformed payloads
+
+**Date:** 2026-04-27
+
+**Context:** The Normalizer is a downstream consumer of arbitrary log
+content forwarded by the "dumb" Ingestor (see ADR-008). Malformed
+payloads — broken JSON, Nginx lines that no longer match the regex,
+truncated entries — are guaranteed to occur eventually. Three responses
+are possible: (1) skip silently, (2) crash the consumer loop,
+(3) quarantine the bad entry and continue.
+
+**Decision:** Adopt the dead-letter pattern. When a `ParseError`,
+`MappingError`, or invalid envelope is detected, the entry is published
+to a separate Redis stream `dead_letter_logs` with the original
+payload and a human-readable failure reason, then acked on the source
+stream so the consumer keeps moving.
+
+**Consequences:**
+- ✅ A single poison-pill payload cannot stop the pipeline. The Normalizer
+  keeps processing legitimate traffic even when an attacker injects
+  deliberately malformed input.
+- ✅ Bad entries are preserved verbatim for forensic analysis, not
+  silently dropped. An operator can later inspect `dead_letter_logs`
+  to understand parser drift or attack attempts.
+- ✅ The dead-letter stream is capped via Redis MAXLEN to prevent
+  unbounded memory growth.
+- ✅ Distinct failure modes are categorized in the reason field
+  (`envelope:`, `normalize:`), simplifying triage.
+- ⚠️ Two streams to monitor instead of one. Acceptable in exchange for
+  the operational resilience.
+
+---
+
+## ADR-012: Storage-layer idempotency via deterministic SHA-256 keys
+
+**Date:** 2026-04-27
+
+**Context:** The Normalizer is an at-least-once consumer of the Redis
+`raw_logs` stream. Several scenarios produce duplicate deliveries:
+the Normalizer crashes after persisting an event but before XACK; the
+Ingestor restarts and re-tails an Nginx log line; an operator manually
+replays a stream segment. Without protection, each duplicate inflates
+the count of failed logins, polluting brute-force detection and other
+correlation rules.
+
+**Decision:** Compute a deterministic idempotency key as
+`SHA-256(source ⨁ format ⨁ payload)` for every raw envelope and store
+it in a `NOT NULL UNIQUE` column on the `events` table. All inserts use
+`INSERT ... ON CONFLICT (idempotency_key) DO NOTHING`, making the
+storage layer the single source of truth for "have we seen this?".
+
+**Consequences:**
+- ✅ Exactly-once persistence is guaranteed by the database, not by
+  application logic. No race condition between "check then insert"
+  can leak a duplicate.
+- ✅ The key is deterministic from the raw input, so duplicates from
+  any retry path (Normalizer crash, Ingestor crash, manual replay)
+  collapse into the same row.
+- ✅ ASCII unit-separator bytes between source/format/payload prevent
+  cross-source collisions where two different sources happen to share
+  identical byte sequences.
+- ✅ The collision risk of SHA-256 is cryptographically negligible at
+  the volumes this platform will ever see.
+- ⚠️ Two genuinely identical events from the same source within the
+  same second (e.g. two clients producing byte-identical Nginx lines)
+  collapse into one row. Acceptable trade-off in this domain: the loss
+  of one observation matters far less than a single duplicate that
+  poisons brute-force counters.
+
+---
+
+
+
 ## Future decisions (placeholder)
 
 Records added during weeks 2–10 will appear below as the system grows:
