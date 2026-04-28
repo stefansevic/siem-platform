@@ -10,10 +10,12 @@ consumes from "raw-logs").
 STREAM_RAW_LOGS = "raw_logs"
 STREAM_NORMALIZED_EVENTS = "normalized_events"
 STREAM_DEAD_LETTER = "dead_letter_logs"  # Malformed payloads quarantined here for forensic analysis
+STREAM_INCIDENTS = "incidents"  # Correlator publishes detected incidents here for the Alert Manager
 
 # Consumer groups
 GROUP_NORMALIZER = "normalizer-group"
 GROUP_CORRELATOR = "correlator-group"
+GROUP_ALERT_MANAGER = "alert-manager-group"
 
 # Keys for state held by the Correlation Engine (sliding-window state, etc.)
 PREFIX_CORRELATION_STATE = "siem:correlation:"
