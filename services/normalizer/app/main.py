@@ -1,3 +1,6 @@
+cd ~/projects/siem-platform
+
+cat > services/normalizer/app/main.py << 'PY_EOF'
 """
 Normalizer service entry point.
 
@@ -27,6 +30,10 @@ from app.db import EventWriter
 from app.redis_consumer import NormalizerConsumer
 
 
+# ============================================
+# JSON logging (consistent with demo-webapp/ingestor style)
+# ============================================
+
 class JSONFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         obj = {
@@ -46,6 +53,10 @@ def _configure_logging(level: str) -> None:
     logging.basicConfig(level=level.upper(), handlers=[handler], force=True)
 
 
+# ============================================
+# Service runner
+# ============================================
+
 async def run_service() -> None:
     settings = Settings()
     _configure_logging(settings.log_level)
@@ -61,6 +72,7 @@ async def run_service() -> None:
     )
     await consumer.connect()
 
+    # Wire SIGINT/SIGTERM to a graceful stop.
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, consumer.stop)
@@ -78,8 +90,11 @@ def main() -> None:
     try:
         asyncio.run(run_service())
     except KeyboardInterrupt:
+        # Already handled by signal handler; just exit silently.
         pass
 
 
 if __name__ == "__main__":
     main()
+PY_EOF
+
