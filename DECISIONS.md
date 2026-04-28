@@ -315,7 +315,106 @@ storage layer the single source of truth for "have we seen this?".
 
 ---
 
+---
 
+## ADR-013: In-memory state for the Correlation Engine
+
+**Date:** 2026-04-28
+
+**Context:** Correlation rules require sliding-window state per subject
+(e.g. one window of failed authentications per source IP). Two
+implementations were considered: a Redis-backed store (sorted sets keyed
+by `(rule, subject)` with timestamps as scores) versus an in-process
+dictionary of Python deques.
+
+**Decision:** Use in-memory state. The engine holds
+`Dict[(rule_name, subject_key), SlidingWindow]` where each SlidingWindow
+is a `collections.deque` of timestamped entries. Stale windows are
+pruned periodically using stream time (the latest event's timestamp),
+not wall-clock.
+
+**Consequences:**
+- ✅ Sub-microsecond per-event dispatch with no network round-trip,
+  enabling realistic single-replica throughput for the demo.
+- ✅ The whole correlation jezgro is testable as pure code: 51 unit
+  tests run in milliseconds with no Redis required.
+- ✅ Restart of the Correlator clears the state. For a defense demo this
+  is acceptable: the simulation script generates its own attack and the
+  detector consumes it within seconds. For a production deployment the
+  state would migrate to Redis sorted sets — listed in Chapter 7
+  (Future work) of the thesis.
+- ⚠️ State is not shared across replicas. Horizontal scaling would
+  require partitioning subjects by a consistent hash so each replica
+  owns a disjoint slice — not in scope for this iteration.
+
+---
+
+## ADR-014: Stream-time semantics for sliding windows
+
+**Date:** 2026-04-28
+
+**Context:** Sliding-window logic needs a definition of "now". Two
+options exist: (a) wall-clock time read from `datetime.now()` whenever
+the rule evaluates, or (b) the timestamp of the most recently observed
+event ("stream time"). Both are commonly used; the choice affects
+testability, replay correctness, and behavior under clock skew.
+
+**Decision:** Adopt stream-time semantics. The engine treats each new
+event's `timestamp` field as the current instant, advancing all windows
+to that point. `prune_stale()` is also called with stream time. No code
+path inside parsers, mapper, rules, engine, or windows reads
+`datetime.now()`.
+
+**Consequences:**
+- ✅ Tests are deterministic. Every test feeds synthetic timestamps and
+  asserts exact behavior at every boundary; no `freezegun` or
+  monkey-patching of `datetime.now`.
+- ✅ Replay is correct. Re-feeding old events from the dead-letter
+  stream or from a Postgres backfill produces the same incidents as
+  the original run.
+- ✅ Resilient to clock skew between log sources and the Correlator
+  host. The rule fires on the relationship between event timestamps,
+  not on the local clock.
+- ⚠️ A truly idle subject does not age out until either a new event
+  arrives or the engine's periodic `prune_stale()` is invoked. The
+  consumer triggers `prune_stale()` after every batch, so memory
+  pressure remains bounded under realistic traffic.
+
+---
+
+## ADR-015: Correlator emits every trigger; deduplication lives in the Alert Manager
+
+**Date:** 2026-04-28
+
+**Context:** When a brute-force rule with threshold 5 sees a sixth, then
+a seventh failure, the rule technically "fires" again with `event_count
+= 6` and `event_count = 7`. The same applies to directory scanning past
+its distinct-path threshold. A naive consumer of the incidents stream
+would see one "attack" produce many incident records.
+
+**Decision:** Correlator does NOT deduplicate. Every rule trigger is
+published verbatim to the `incidents` stream with its current
+`event_count`, contributing event IDs, and a fresh incident UUID. The
+Alert Manager (Week 5) is responsible for collapsing related triggers
+into a single open incident, updating its `event_count` and
+`last_event_at` on subsequent fires from the same `(rule, source_ip)`.
+
+**Consequences:**
+- ✅ Correlator stays simple and stateless beyond its sliding windows.
+  It does not need to remember "did I already alert about this attack
+  in the last N minutes?"
+- ✅ The deduplication policy is a single-service concern. Tuning the
+  policy (silence window length, escalation rules, severity bumps) is
+  done in the Alert Manager without touching the detection logic.
+- ✅ The full audit trail is preserved on the stream. Every individual
+  trigger remains inspectable for forensic analysis.
+- ⚠️ The raw incidents stream is verbose: a 6-failure brute-force
+  produced 2 events, an 11-path directory scan produced 20 events in
+  the live demo. This is expected behavior; the Alert Manager will
+  reduce these to one open incident per attack episode in the
+  `incidents` Postgres table.
+
+---
 
 ## Future decisions (placeholder)
 
