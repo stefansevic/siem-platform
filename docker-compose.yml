@@ -149,24 +149,21 @@ services:
     networks:
       - siem-net
 
-  # correlator:
-  #   build:
-  #     context: ./services/correlator
-  #     dockerfile: Dockerfile
-  #   container_name: siem-correlator
-  #   restart: unless-stopped
-  #   environment:
-  #     POSTGRES_HOST: ${POSTGRES_HOST}
-  #     REDIS_HOST: ${REDIS_HOST}
-  #   ports:
-  #     - "${CORRELATOR_PORT}:8003"
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_healthy
-  #   networks:
-  #     - siem-net
+  correlator:
+    build:
+      context: .
+      dockerfile: services/correlator/Dockerfile
+    container_name: siem-correlator
+    restart: unless-stopped
+    environment:
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      LOG_LEVEL: ${LOG_LEVEL}
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - siem-net
 
   # alert-manager:
   #   build:

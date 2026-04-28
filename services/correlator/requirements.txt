@@ -1,0 +1,8 @@
+# Production dependencies for the Correlator service.
+
+# Core
+pydantic==2.13.3
+pydantic-settings==2.14.0
+
+# Redis (async included in main package since 4.2.x)
+redis==7.4.0
