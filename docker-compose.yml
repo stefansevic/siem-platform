@@ -165,25 +165,30 @@ services:
     networks:
       - siem-net
 
-  # alert-manager:
-  #   build:
-  #     context: ./services/alert-manager
-  #     dockerfile: Dockerfile
-  #   container_name: siem-alert-manager
-  #   restart: unless-stopped
-  #   environment:
-  #     POSTGRES_HOST: ${POSTGRES_HOST}
-  #     REDIS_HOST: ${REDIS_HOST}
-  #     ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL}
-  #   ports:
-  #     - "${ALERT_MANAGER_PORT}:8004"
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_healthy
-  #   networks:
-  #     - siem-net
+  alert-manager:
+    build:
+      context: .
+      dockerfile: services/alert-manager/Dockerfile
+    container_name: siem-alert-manager
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_PORT: ${POSTGRES_PORT}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      LOG_LEVEL: ${LOG_LEVEL}
+      ALERT_SILENCE_WINDOW_SECONDS: ${ALERT_SILENCE_WINDOW_SECONDS:-300}
+      ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - siem-net
 
   # api-gateway:
   #   build:
