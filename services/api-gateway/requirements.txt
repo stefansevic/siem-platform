@@ -1,0 +1,13 @@
+# Production dependencies for the API Gateway service.
+
+# Web framework
+fastapi==0.136.1
+uvicorn[standard]==0.46.0
+
+# Core
+pydantic==2.13.3
+pydantic-settings==2.14.0
+
+# Postgres (async)
+sqlalchemy[asyncio]==2.0.49
+asyncpg==0.31.0
