@@ -416,6 +416,90 @@ into a single open incident, updating its `event_count` and
 
 ---
 
+
+---
+
+## ADR-016: Time-based silence window for incident deduplication
+
+**Date:** 2026-04-29
+
+**Context:** The Correlator emits an incident every time a rule's
+threshold is reached. A six-failure brute-force produces two triggers
+(at the 5th and 6th event); an eleven-path directory scan produced
+fifteen triggers in the live demo. Persisting each trigger as a fresh
+row would flood operators with one apparent attack expressed as dozens
+of records.
+
+Three approaches were considered:
+    A. Silence window: treat all triggers within N minutes of the last
+       activity for the same (rule, source_ip) as the same incident.
+    B. Status-driven: keep merging until the operator marks the
+       incident as closed/acknowledged.
+    C. Use the rule's own time window as the silence period.
+
+**Decision:** Adopt option A with a default 5-minute silence window
+(configurable via ALERT_SILENCE_WINDOW_SECONDS). The Alert Manager
+queries `incidents` for an open row matching (rule_name, source_ip)
+whose last_event_at is within the silence window relative to the new
+trigger; if found, it merges; otherwise it inserts a fresh incident.
+
+**Consequences:**
+- ✅ One incident row per attack episode. The directory-scan demo
+  collapsed 15 triggers into a single row with event_count=22.
+- ✅ Tunable per environment without a code change. A noisier
+  environment can shorten the window; a quieter one can extend it.
+- ✅ A new attack from the same IP after several minutes of silence
+  starts a fresh incident — the operator can distinguish "ongoing"
+  from "returned" attackers.
+- ✅ Status-driven dedup (B) was rejected because in our flow no one
+  closes incidents during a defense demo, which would cause every
+  future attack to merge into the very first one indefinitely.
+- ⚠️ The silence window is global across rules. If different rules
+  needed different windows, this would be configured per-rule. Out
+  of scope for the prototype.
+- ⚠️ Severity preservation: a merged trigger never downgrades the
+  incident's severity. An operator-set CRITICAL stays CRITICAL even
+  if a low-severity duplicate arrives later.
+
+---
+
+## ADR-017: Composite notifier pattern with isolated failure handling
+
+**Date:** 2026-04-29
+
+**Context:** The project specification mentions both webhook and
+console notifications. Two implementations are needed, and they may
+share or diverge in delivery semantics over time. A naive design
+hard-codes both calls inline; a flexible one introduces an abstraction
+that can grow with future integrations (Slack, PagerDuty, email).
+
+**Decision:** Define a `Notifier` abstract base class with a single
+`async notify(incident, was_merged)` method. Provide three concrete
+implementations:
+    - ConsoleNotifier (always active; structured JSON log line).
+    - WebhookNotifier (opt-in; HTTP POST to a configured URL).
+    - CompositeNotifier (dispatches to a list of notifiers concurrently
+      via asyncio.gather, isolating each from failures in the others).
+
+**Consequences:**
+- ✅ The Alert Manager wires its notifier composition once at startup;
+  the consumer loop is unaware of how many or which notifiers exist.
+- ✅ Adding a third notifier (e.g. for Slack) is a one-file change.
+- ✅ A failing notifier — webhook timeout, malformed Slack payload —
+  cannot block the others or the consumer loop. Persistence has
+  already happened by the time notify() runs, so notification is
+  treated as best-effort.
+- ✅ Webhook is genuinely opt-in: setting ALERT_WEBHOOK_URL=https://...
+  enables it; leaving it unset means the service runs with console
+  alerts only and no failed delivery attempts.
+- ⚠️ Notification ordering is not guaranteed across notifiers. Each
+  fires concurrently. For the prototype this is acceptable; an
+  explicit order requirement would change the dispatch from gather
+  to a sequential loop.
+
+---
+
+
 ## Future decisions (placeholder)
 
 Records added during weeks 2–10 will appear below as the system grows:
