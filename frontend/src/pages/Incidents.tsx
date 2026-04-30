@@ -14,6 +14,9 @@ import { SeverityBadge } from '../components/SeverityBadge';
 import { IncidentDetailModal } from '../components/IncidentDetailModal';
 import { formatAbsolute, formatRelative } from '../utils/time';
 import { ChevronLeft, ChevronRight, Filter } from 'lucide-react';
+import { RefreshIndicator } from '../components/RefreshIndicator';
+import { EmptyState } from '../components/EmptyState';
+import { ShieldCheck } from 'lucide-react';
 
 const POLL_MS = 5000;
 const PAGE_SIZE = 25;
@@ -36,7 +39,7 @@ export function Incidents() {
     [filters, page],
   );
 
-  const { data, error, loading, refresh } = usePolling(fetcher, POLL_MS);
+  const { data, error, loading, lastUpdated, refresh } = usePolling(fetcher, POLL_MS);
 
   const totalPages = data
     ? Math.max(1, Math.ceil(data.total / PAGE_SIZE))
@@ -59,10 +62,14 @@ export function Incidents() {
     <div className="space-y-4">
       <header className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Incidents</h1>
-        <span className="text-xs text-[var(--color-muted)]">
-          Auto-refreshing every {POLL_MS / 1000}s
-          {data ? ` — ${data.total} matching` : ''}
-        </span>
+        <div className="flex items-center gap-3">
+          {data && (
+            <span className="text-xs text-[var(--color-muted)]">
+              {data.total} matching
+            </span>
+          )}
+          <RefreshIndicator loading={loading} lastUpdated={lastUpdated} />
+        </div>
       </header>
 
       {error && (
@@ -92,7 +99,15 @@ export function Incidents() {
             {loading && !data ? (
               <RowSpan colSpan={7}>Loading…</RowSpan>
             ) : !data || data.items.length === 0 ? (
-              <RowSpan colSpan={7}>No incidents matching the filters.</RowSpan>
+              <tr>
+                <td colSpan={7}>
+                  <EmptyState
+                    Icon={ShieldCheck}
+                    title="No incidents to triage"
+                    description="No incidents match the current filters. New attacks will appear here automatically as the platform detects them."
+                  />
+                </td>
+              </tr>
             ) : (
               data.items.map((inc) => (
                 <IncidentRow

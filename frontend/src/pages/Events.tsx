@@ -16,6 +16,10 @@ import type { Event } from '../api/types';
 import { usePolling } from '../hooks/usePolling';
 import { formatAbsolute, formatRelative } from '../utils/time';
 import { ChevronLeft, ChevronRight, Filter } from 'lucide-react';
+import { RefreshIndicator } from '../components/RefreshIndicator';
+import { EmptyState } from '../components/EmptyState';
+import { Inbox } from 'lucide-react';
+
 
 const POLL_MS = 5000;
 const PAGE_SIZE = 50;
@@ -34,7 +38,7 @@ export function Events() {
     [filters, page],
   );
 
-  const { data, error, loading } = usePolling(fetcher, POLL_MS);
+  const { data, error, loading, lastUpdated } = usePolling(fetcher, POLL_MS);
 
   const totalPages = data
     ? Math.max(1, Math.ceil(data.total / PAGE_SIZE))
@@ -57,10 +61,14 @@ export function Events() {
     <div className="space-y-4">
       <header className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Events</h1>
-        <span className="text-xs text-[var(--color-muted)]">
-          Auto-refreshing every {POLL_MS / 1000}s
-          {data ? ` — ${data.total.toLocaleString()} matching` : ''}
-        </span>
+        <div className="flex items-center gap-3">
+          {data && (
+            <span className="text-xs text-[var(--color-muted)]">
+              {data.total.toLocaleString()} matching
+            </span>
+          )}
+          <RefreshIndicator loading={loading} lastUpdated={lastUpdated} />
+        </div>
       </header>
 
       {error && (
@@ -91,7 +99,15 @@ export function Events() {
             {loading && !data ? (
               <RowSpan colSpan={8}>Loading…</RowSpan>
             ) : !data || data.items.length === 0 ? (
-              <RowSpan colSpan={8}>No events matching the filters.</RowSpan>
+              <tr>
+                <td colSpan={8}>
+                  <EmptyState
+                    Icon={Inbox}
+                    title="No matching events"
+                    description="Try widening the time range or clearing some filters."
+                  />
+                </td>
+              </tr>
             ) : (
               data.items.map((evt) => <EventRow key={evt.id} event={evt} />)
             )}

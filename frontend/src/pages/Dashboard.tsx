@@ -27,6 +27,8 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import { RefreshIndicator } from '../components/RefreshIndicator';
+
 
 const POLL_MS = 5000;
 
@@ -48,9 +50,10 @@ export function Dashboard() {
     <div className="space-y-6">
       <header className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Dashboard</h1>
-        <span className="text-xs text-[var(--color-muted)]">
-          Auto-refreshing every {POLL_MS / 1000}s
-        </span>
+        <RefreshIndicator
+          loading={summary.loading}
+          lastUpdated={summary.lastUpdated}
+        />
       </header>
 
       {/* ---------- Error banner ---------- */}

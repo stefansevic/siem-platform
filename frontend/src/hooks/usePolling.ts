@@ -5,7 +5,7 @@
  * Uses a ref to ignore late responses if the component already unmounted.
  *
  * Usage:
- *   const { data, error, loading } = usePolling(
+ *   const { data, error, loading, lastUpdated } = usePolling(
  *     () => fetchStatsSummary(),
  *     5000,
  *   );
@@ -17,6 +17,8 @@ export interface PollingState<T> {
   data: T | null;
   error: Error | null;
   loading: boolean;
+  /** ISO timestamp of the most recent successful fetch, or null if never. */
+  lastUpdated: string | null;
   /** Re-runs the fetcher immediately. */
   refresh: () => void;
 }
@@ -28,11 +30,10 @@ export function usePolling<T>(
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
-  // Trigger counter — incrementing this re-runs the effect.
   const [tick, setTick] = useState(0);
 
-  // Keep fetcher latest in a ref so the effect doesn't restart every render.
   const fetcherRef = useRef(fetcher);
   fetcherRef.current = fetcher;
 
@@ -45,6 +46,7 @@ export function usePolling<T>(
         if (!cancelled) {
           setData(result);
           setError(null);
+          setLastUpdated(new Date().toISOString());
         }
       } catch (err) {
         if (!cancelled) {
@@ -64,13 +66,13 @@ export function usePolling<T>(
       cancelled = true;
       clearInterval(id);
     };
-    // tick triggers manual refresh; intervalMs lets caller change cadence
   }, [intervalMs, tick]);
 
   return {
     data,
     error,
     loading,
+    lastUpdated,
     refresh: () => setTick((t) => t + 1),
   };
 }

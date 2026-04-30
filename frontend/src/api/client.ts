@@ -66,6 +66,17 @@ export async function fetchEvent(id: string): Promise<Event> {
   const { data } = await http.get<Event>(`/events/${id}`);
   return data;
 }
+/**
+ * Fetch many events in parallel by ID.
+ * Used by the incident detail modal to enrich contributing_events.
+ * Failures (e.g. event was deleted) are skipped silently.
+ */
+export async function fetchEventsByIds(ids: string[]): Promise<Event[]> {
+  const results = await Promise.allSettled(ids.map((id) => fetchEvent(id)));
+  return results
+    .filter((r): r is PromiseFulfilledResult<Event> => r.status === 'fulfilled')
+    .map((r) => r.value);
+}
 
 // ----- Incidents -----
 

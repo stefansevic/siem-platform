@@ -3,7 +3,7 @@
  *
  * Behavior:
  *   - Loads the incident on open via fetchIncident(id).
- *   - Shows summary, full details JSON, and contributing event IDs.
+ *   - Loads contributing events in parallel for the per-event table.
  *   - Allows the operator to change status and add notes; PATCHes the
  *     change and notifies the parent so the table refreshes.
  *   - Closes on Escape, click outside, or the X button.
@@ -11,8 +11,12 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { X, AlertCircle } from 'lucide-react';
-import { fetchIncident, updateIncidentStatus } from '../api/client';
-import type { Incident, IncidentStatus } from '../api/types';
+import {
+  fetchEventsByIds,
+  fetchIncident,
+  updateIncidentStatus,
+} from '../api/client';
+import type { Event, Incident, IncidentStatus } from '../api/types';
 import { SeverityBadge } from './SeverityBadge';
 import { formatAbsolute, formatRelative } from '../utils/time';
 
@@ -31,6 +35,7 @@ const STATUS_OPTIONS: IncidentStatus[] = [
 
 export function IncidentDetailModal({ incidentId, onClose, onUpdated }: Props) {
   const [incident, setIncident] = useState<Incident | null>(null);
+  const [events, setEvents] = useState<Event[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -39,17 +44,35 @@ export function IncidentDetailModal({ incidentId, onClose, onUpdated }: Props) {
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
 
-  // ----- Load incident -----
+  // ----- Load incident + contributing events -----
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setEvents(null);
+
     fetchIncident(incidentId)
-      .then((inc) => {
+      .then(async (inc) => {
         if (cancelled) return;
         setIncident(inc);
         setNewStatus(inc.status);
         setNotes(inc.notes ?? '');
         setError(null);
+
+        // Enrich contributing event IDs with full records
+        if (inc.contributing_events && inc.contributing_events.length > 0) {
+          const enriched = await fetchEventsByIds(inc.contributing_events);
+          if (!cancelled) {
+            // Sort newest-first to match operator expectations
+            enriched.sort(
+              (a, b) =>
+                new Date(b.timestamp).getTime() -
+                new Date(a.timestamp).getTime(),
+            );
+            setEvents(enriched);
+          }
+        } else {
+          setEvents([]);
+        }
       })
       .catch((err) => {
         if (!cancelled) setError(err instanceof Error ? err.message : String(err));
@@ -57,6 +80,7 @@ export function IncidentDetailModal({ incidentId, onClose, onUpdated }: Props) {
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
+
     return () => {
       cancelled = true;
     };
@@ -102,7 +126,7 @@ export function IncidentDetailModal({ incidentId, onClose, onUpdated }: Props) {
       className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
     >
       <div
-        className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col"
+        className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col"
       >
         {/* ---------- Header ---------- */}
         <header className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-border)]">
@@ -173,18 +197,15 @@ export function IncidentDetailModal({ incidentId, onClose, onUpdated }: Props) {
                 </Section>
               )}
 
-              {/* ---------- Contributing events ---------- */}
+              {/* ---------- Contributing events table ---------- */}
               {incident.contributing_events && incident.contributing_events.length > 0 && (
                 <Section
                   title={`Contributing events (${incident.contributing_events.length})`}
                 >
-                  <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md p-3 max-h-32 overflow-y-auto">
-                    <ul className="text-xs font-mono text-[var(--color-muted)] space-y-1">
-                      {incident.contributing_events.map((id) => (
-                        <li key={id}>{id}</li>
-                      ))}
-                    </ul>
-                  </div>
+                  <ContributingEventsTable
+                    events={events}
+                    expectedCount={incident.contributing_events.length}
+                  />
                 </Section>
               )}
 
@@ -288,4 +309,123 @@ function Section({
       {children}
     </div>
   );
+}
+
+interface ContributingEventsTableProps {
+  events: Event[] | null;
+  expectedCount: number;
+}
+
+function ContributingEventsTable({
+  events,
+  expectedCount,
+}: ContributingEventsTableProps) {
+  if (events === null) {
+    return (
+      <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md p-3 text-xs text-[var(--color-muted)]">
+        Loading {expectedCount} events…
+      </div>
+    );
+  }
+
+  if (events.length === 0) {
+    return (
+      <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md p-3 text-xs text-[var(--color-muted)]">
+        No contributing events available.
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md overflow-hidden">
+      <div className="max-h-64 overflow-y-auto">
+        <table className="w-full text-xs">
+          <thead className="bg-white/5 text-[var(--color-muted)] sticky top-0">
+            <tr>
+              <ECth>When</ECth>
+              <ECth>Method</ECth>
+              <ECth>Path</ECth>
+              <ECth>Status</ECth>
+              <ECth>Outcome</ECth>
+              <ECth>User</ECth>
+            </tr>
+          </thead>
+          <tbody>
+            {events.map((evt) => (
+              <tr
+                key={evt.id}
+                className="border-t border-[var(--color-border)] hover:bg-white/5 transition-colors"
+              >
+                <ECtd title={formatAbsolute(evt.timestamp)}>
+                  {formatRelative(evt.timestamp)}
+                </ECtd>
+                <ECtd className="font-mono">{evt.http_method ?? '—'}</ECtd>
+                <ECtd
+                  className="font-mono max-w-[180px] truncate"
+                  title={evt.url_path ?? ''}
+                >
+                  {evt.url_path ?? '—'}
+                </ECtd>
+                <ECtd>
+                  <ECStatusCode code={evt.http_response_status_code} />
+                </ECtd>
+                <ECtd>
+                  <ECOutcome value={evt.event_outcome} />
+                </ECtd>
+                <ECtd>{evt.user_name ?? '—'}</ECtd>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function ECth({ children }: { children: React.ReactNode }) {
+  return (
+    <th className="text-left font-medium uppercase tracking-wider px-3 py-2">
+      {children}
+    </th>
+  );
+}
+
+function ECtd({
+  children,
+  className,
+  title,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  title?: string;
+}) {
+  return (
+    <td
+      className={['px-3 py-2 text-[var(--color-text)]', className ?? ''].join(' ')}
+      title={title}
+    >
+      {children}
+    </td>
+  );
+}
+
+function ECStatusCode({ code }: { code: number | null }) {
+  if (code === null) return <span className="text-[var(--color-muted)]">—</span>;
+  let cls = 'text-[var(--color-text)]';
+  if (code >= 500) cls = 'text-red-400';
+  else if (code >= 400) cls = 'text-amber-400';
+  else if (code >= 300) cls = 'text-blue-400';
+  else if (code >= 200) cls = 'text-green-400';
+  return <span className={`font-mono ${cls}`}>{code}</span>;
+}
+
+function ECOutcome({ value }: { value: string | null }) {
+  if (!value) return <span className="text-[var(--color-muted)]">—</span>;
+  const cls =
+    value === 'success'
+      ? 'text-green-400'
+      : value === 'failure'
+        ? 'text-red-400'
+        : 'text-[var(--color-muted)]';
+  return <span className={`uppercase ${cls}`}>{value}</span>;
 }
