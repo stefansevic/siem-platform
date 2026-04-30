@@ -154,6 +154,12 @@ def get_client_ip(request: Request) -> str:
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     start = time.perf_counter()
+
+    # Health-check noise: skip logging for the Docker health probe.
+    # /health is hit every 5 seconds and is not interesting for SIEM.
+    if request.url.path == "/health":
+        return await call_next(request)
+
     response = await call_next(request)
     duration_ms = round((time.perf_counter() - start) * 1000, 2)
 
