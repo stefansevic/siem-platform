@@ -568,6 +568,59 @@ or SSE channel.
 
 ---
 
+---
+
+## ADR-020: UI polish priorities for the operator dashboard
+
+**Date:** 2026-04-30
+
+**Context:** After the basic dashboard shipped (Week 6) it was clear
+that several quality-of-life elements were missing — an operator
+glancing at a SIEM screen needs reassurance that data is fresh,
+context for empty states, and confirmation when their actions
+landed. A list of seven candidate improvements was triaged.
+
+**Decision:** Implement the six high-value polish items, skip the
+seventh (light-theme toggle).
+
+Implemented:
+    - **Health indicator** in the sidebar (color-coded dot from a
+      separate /health probe).
+    - **Severity-coded badge** on the Incidents nav link with the
+      open count.
+    - **Refresh indicator** in every page header (spinning icon while
+      polling, "Updated Xs ago" otherwise).
+    - **Empty states** in Incidents and Events tables with iconography
+      and guidance.
+    - **Per-event table** inside the incident detail modal, replacing
+      the bare list of UUIDs with what each contributing event
+      actually was.
+    - **Toast notifications** for triage actions (status update,
+      errors).
+
+Skipped: a light-theme toggle. Industry SIEM dashboards (Splunk,
+Datadog, Sentry) default to dark and most do not offer a toggle, since
+operators stare at the screen for hours. Estimated cost was 3-4 hours
+of refactoring (parallel CSS variables, Recharts color overrides,
+component-by-component verification) for a feature the demo audience
+will not exercise.
+
+**Consequences:**
+- ✅ Each visible page now has fresh-data signaling, error feedback,
+  and empty-state UX. The dashboard reads as a finished product
+  rather than a prototype.
+- ✅ The skipped item becomes a documented Future-work item in the
+  thesis (Chapter 7) — "high-contrast and light-theme support for
+  enterprise environments".
+- ✅ The polish items use only existing dependencies (lucide-react,
+  Tailwind utility classes). No new libraries, no bundle bloat.
+- ⚠️ The toast component is in-house (no `react-toastify`, no
+  `sonner`). Trade-off: smaller surface, fewer features. For the
+  prototype's needs (success / error / info, single line of text)
+  this is sufficient.
+
+---
+
 
 ## Future decisions (placeholder)
 
