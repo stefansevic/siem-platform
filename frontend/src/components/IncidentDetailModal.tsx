@@ -19,6 +19,8 @@ import {
 import type { Event, Incident, IncidentStatus } from '../api/types';
 import { SeverityBadge } from './SeverityBadge';
 import { formatAbsolute, formatRelative } from '../utils/time';
+import { useToast } from './Toast';
+
 
 interface Props {
   incidentId: string;
@@ -34,6 +36,7 @@ const STATUS_OPTIONS: IncidentStatus[] = [
 ];
 
 export function IncidentDetailModal({ incidentId, onClose, onUpdated }: Props) {
+  const { addToast } = useToast();
   const [incident, setIncident] = useState<Incident | null>(null);
   const [events, setEvents] = useState<Event[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -112,9 +115,16 @@ export function IncidentDetailModal({ incidentId, onClose, onUpdated }: Props) {
         notes: notes || undefined,
       });
       setIncident(updated);
+      addToast(
+        `Incident marked ${newStatus.replace('_', ' ')}`,
+        'success',
+      );
       onUpdated();
+      onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      const message = err instanceof Error ? err.message : String(err);
+      setError(message);
+      addToast(`Failed to update incident: ${message}`, 'error');
     } finally {
       setSaving(false);
     }
