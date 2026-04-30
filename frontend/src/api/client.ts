@@ -105,3 +105,10 @@ export async function fetchRules(): Promise<Rule[]> {
   const { data } = await http.get<Rule[]>('/rules');
   return data;
 }
+
+// ----- Health -----
+
+export async function fetchHealth(): Promise<{ status: string }> {
+  const { data } = await http.get<{ status: string }>('/health');
+  return data;
+}

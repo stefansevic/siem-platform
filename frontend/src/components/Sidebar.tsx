@@ -14,6 +14,8 @@ import {
   Search,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
+import { HealthIndicator } from './HealthIndicator';
+
 
 interface NavItem {
   to: string;
@@ -62,8 +64,11 @@ export function Sidebar() {
         ))}
       </nav>
 
-      <div className="px-5 py-4 border-t border-[var(--color-border)] text-xs text-[var(--color-muted)]">
-        v0.1.0 — Diplomski rad
+      <div className="px-5 py-3 border-t border-[var(--color-border)]">
+        <HealthIndicator />
+        <div className="text-xs text-[var(--color-muted)] mt-2">
+          v0.1.0 — Diplomski rad
+        </div>
       </div>
     </aside>
   );
