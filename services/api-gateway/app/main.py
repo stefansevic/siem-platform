@@ -459,14 +459,14 @@ async def list_rules() -> List[RuleDTO]:
             name="directory_scanning",
             description="Many distinct 404 paths probed from the same IP.",
             severity="medium",
-            threshold=10,
-            window_seconds=30,
+            threshold=20,
+            window_seconds=60,
         ),
         RuleDTO(
             name="account_takeover",
             description="A series of failed logins followed by a successful one from the same IP.",
             severity="critical",
-            threshold=3,
-            window_seconds=300,
+            threshold=5,
+            window_seconds=600,
         ),
     ]

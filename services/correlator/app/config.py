@@ -32,12 +32,12 @@ class Settings(BaseSettings):
     brute_force_window_seconds: int = Field(
         default=60, alias="BRUTE_FORCE_WINDOW_SECONDS"
     )
-    dir_scan_threshold: int = Field(default=10, alias="DIR_SCAN_THRESHOLD")
+    dir_scan_threshold: int = Field(default=20, alias="DIR_SCAN_THRESHOLD")
     dir_scan_window_seconds: int = Field(
-        default=30, alias="DIR_SCAN_WINDOW_SECONDS"
+        default=60, alias="DIR_SCAN_WINDOW_SECONDS"
     )
-    ato_failure_threshold: int = Field(default=3, alias="ATO_FAILURE_THRESHOLD")
-    ato_window_seconds: int = Field(default=300, alias="ATO_WINDOW_SECONDS")
+    ato_failure_threshold: int = Field(default=5, alias="ATO_FAILURE_THRESHOLD")
+    ato_window_seconds: int = Field(default=600, alias="ATO_WINDOW_SECONDS")
 
     # ----- Convenience -----
     @property
