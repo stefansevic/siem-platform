@@ -499,6 +499,75 @@ implementations:
 
 ---
 
+---
+
+## ADR-018: Hybrid frontend deployment — dev server in development, Docker for demos
+
+**Date:** 2026-04-30
+
+**Context:** The dashboard is a Vite + React app. Two natural ways to
+run it during the project: run `npm run dev` directly on the host
+(fast hot reload, native debugging) or build a Docker image (production
+parity, single `docker compose up` for the whole stack). Each excels
+where the other is awkward.
+
+**Decision:** Support both. During day-to-day development, the
+frontend runs via `npm run dev` from the host on port 5173 with hot
+reload. For demos, the cross-platform check, and any production-like
+verification, the frontend runs in a Docker container on port 3000,
+built via the multi-stage Dockerfile (Vite build → nginx serve).
+
+**Consequences:**
+- ✅ Iteration speed during development is sub-second; the Docker image
+  takes ~90s to build, which is acceptable since it is built rarely.
+- ✅ The Docker image is small (~25 MB) because the final stage only
+  carries the compiled static assets and nginx, not Node.js or the
+  source tree.
+- ✅ A single `docker compose up` brings the whole stack online, which
+  is exactly what an external reviewer needs.
+- ✅ The frontend container's nginx is configured for SPA routing
+  (`try_files $uri $uri/ /index.html`), so deep links like
+  `/incidents/<id>` resolve correctly when the user reloads.
+- ⚠️ The API base URL is currently baked into the frontend at build
+  time (`http://localhost:8005`). Hosting the dashboard on a different
+  origin will require parameterizing this; out of scope for the
+  prototype (see ADR-019 for the dev/demo trade-off).
+
+---
+
+## ADR-019: HTTP polling, not WebSocket, for live data
+
+**Date:** 2026-04-30
+
+**Context:** A SIEM dashboard needs to feel "live" — incidents should
+appear within seconds, stat counters should update on their own.
+Two implementation patterns are common: HTTP polling at a short
+interval (5 s typical), or a server push channel (WebSocket or
+Server-Sent Events) where the gateway streams updates as they happen.
+
+**Decision:** Use HTTP polling at 5-second intervals. A custom
+`usePolling` hook drives every live view (Dashboard, Incidents, Events).
+The API Gateway exposes only conventional REST endpoints; no WebSocket
+or SSE channel.
+
+**Consequences:**
+- ✅ The Gateway stays a simple FastAPI app. No long-lived connections,
+  no WebSocket lifecycle to manage, no Redis Pub/Sub fan-out.
+- ✅ The frontend stays simple too. A single hook covers loading,
+  error, and refresh state for every page.
+- ✅ Five seconds of latency is invisible during a live demo. SOC
+  dashboards from major vendors (Splunk, Datadog) default to similar
+  intervals.
+- ✅ Backwards compatible with future scale: the polling load is one
+  request per page per 5s per user, which is trivial for the Gateway.
+- ⚠️ Live event feed during a high-rate attack can lag by up to 5s.
+  If true real-time becomes a requirement (live SOC operations rather
+  than analyst review), an SSE endpoint that pushes new incident
+  notifications would be a small follow-up — listed in Chapter 7
+  (Future work) of the thesis.
+
+---
+
 
 ## Future decisions (placeholder)
 
