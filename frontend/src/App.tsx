@@ -7,6 +7,7 @@
 import { Dashboard } from './pages/Dashboard';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Layout } from './components/Layout';
+import { Incidents } from './pages/Incidents';
 
 // Placeholder pages — replaced with real ones page-by-page.
 function Placeholder({ name }: { name: string }) {
@@ -36,7 +37,7 @@ function App() {
       <Routes>
         <Route element={<Layout />}>
           <Route path="/"          element={<Dashboard />} />
-          <Route path="/incidents" element={<Placeholder name="Incidents" />} />
+          <Route path="/incidents" element={<Incidents />} />
           <Route path="/events"    element={<Placeholder name="Events" />} />
           <Route path="/rules"     element={<Placeholder name="Rules" />} />
           <Route path="/search"    element={<ComingSoon  name="Search" />} />
