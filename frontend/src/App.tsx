@@ -9,16 +9,9 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { Incidents } from './pages/Incidents';
 import { Events } from './pages/Events';
+import { Rules } from './pages/Rules';
 
-// Placeholder pages — replaced with real ones page-by-page.
-function Placeholder({ name }: { name: string }) {
-  return (
-    <div>
-      <h1 className="text-2xl font-semibold mb-2">{name}</h1>
-      <p className="text-[var(--color-muted)]">Coming next.</p>
-    </div>
-  );
-}
+
 
 function ComingSoon({ name }: { name: string }) {
   return (
@@ -40,7 +33,7 @@ function App() {
           <Route path="/"          element={<Dashboard />} />
           <Route path="/incidents" element={<Incidents />} />
           <Route path="/events" element={<Events />} />
-          <Route path="/rules"     element={<Placeholder name="Rules" />} />
+          <Route path="/rules" element={<Rules />} />
           <Route path="/search"    element={<ComingSoon  name="Search" />} />
         </Route>
       </Routes>
