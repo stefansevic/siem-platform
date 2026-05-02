@@ -288,25 +288,25 @@ class TestAccountTakeoverSubject:
         assert rule.subject(ev) is None
 
 
-class TestAccountTakeoverEvaluate:
     def test_failures_followed_by_success_fires(self):
+        """ATO fires when 3 failures and a success target the same user."""
         rule = AccountTakeoverRule(
             failure_threshold=3, window=timedelta(minutes=5),
         )
         w = SlidingWindow(rule.window_duration)
         events = [
             auth_event(outcome=EventOutcome.FAILURE, user_name="alice", timestamp=at(0)),
-            auth_event(outcome=EventOutcome.FAILURE, user_name="bob",   timestamp=at(10)),
-            auth_event(outcome=EventOutcome.FAILURE, user_name="carol", timestamp=at(20)),
-            auth_event(outcome=EventOutcome.SUCCESS, user_name="admin", timestamp=at(30)),
+            auth_event(outcome=EventOutcome.FAILURE, user_name="alice", timestamp=at(10)),
+            auth_event(outcome=EventOutcome.FAILURE, user_name="alice", timestamp=at(20)),
+            auth_event(outcome=EventOutcome.SUCCESS, user_name="alice", timestamp=at(30)),
         ]
         incident = feed(rule, w, events)
         assert incident is not None
         assert incident.rule_name == "account_takeover"
         assert incident.severity == IncidentSeverity.CRITICAL.value
         assert incident.details["preceding_failure_count"] == 3
-        assert incident.details["successful_user_name"] == "admin"
-        assert incident.details["attempted_usernames"] == ["alice", "bob", "carol"]
+        assert incident.details["successful_user_name"] == "alice"
+        assert incident.details["attempted_usernames"] == ["alice"]
 
     def test_success_with_too_few_prior_failures_does_not_fire(self):
         rule = AccountTakeoverRule(
@@ -353,4 +353,47 @@ class TestAccountTakeoverEvaluate:
             auth_event(outcome=EventOutcome.SUCCESS, timestamp=at(400)),
         ]
         # Cutoff at t=400 is t=100 -> all 3 failures evicted
+        assert feed(rule, w, events) is None
+
+    def test_failures_for_different_user_than_success_does_not_fire(self):
+        """
+        Three users on the same IP each typo their password while a fourth
+        logs in successfully. With per-user matching, this is NOT account
+        takeover — those failures and the success are unrelated events.
+
+        Regression test for the false positive observed during the
+        normal-traffic control group in Week 8.
+        """
+        rule = AccountTakeoverRule(
+            failure_threshold=3, window=timedelta(minutes=5),
+        )
+        w = SlidingWindow(rule.window_duration)
+        events = [
+            auth_event(outcome=EventOutcome.FAILURE, user_name="alice", timestamp=at(0)),
+            auth_event(outcome=EventOutcome.FAILURE, user_name="bob",   timestamp=at(10)),
+            auth_event(outcome=EventOutcome.FAILURE, user_name="carol", timestamp=at(20)),
+            auth_event(outcome=EventOutcome.SUCCESS, user_name="admin", timestamp=at(30)),
+        ]
+        assert feed(rule, w, events) is None
+
+    def test_failures_for_other_users_do_not_count_toward_target(self):
+        """
+        2 failures for the target user + 5 failures for unrelated users +
+        success for the target user. Only the 2 same-user failures count;
+        threshold is 3, so ATO must NOT fire.
+        """
+        rule = AccountTakeoverRule(
+            failure_threshold=3, window=timedelta(minutes=5),
+        )
+        w = SlidingWindow(rule.window_duration)
+        events = [
+            auth_event(outcome=EventOutcome.FAILURE, user_name="alice", timestamp=at(0)),
+            auth_event(outcome=EventOutcome.FAILURE, user_name="bob",   timestamp=at(5)),
+            auth_event(outcome=EventOutcome.FAILURE, user_name="bob",   timestamp=at(10)),
+            auth_event(outcome=EventOutcome.FAILURE, user_name="carol", timestamp=at(15)),
+            auth_event(outcome=EventOutcome.FAILURE, user_name="carol", timestamp=at(20)),
+            auth_event(outcome=EventOutcome.FAILURE, user_name="alice", timestamp=at(25)),
+            auth_event(outcome=EventOutcome.SUCCESS, user_name="alice", timestamp=at(30)),
+        ]
+        # Alice has only 2 failures; threshold is 3; ATO must not fire.
         assert feed(rule, w, events) is None

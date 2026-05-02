@@ -238,24 +238,29 @@ class DirectoryScanningRule(CorrelationRule):
 
 class AccountTakeoverRule(CorrelationRule):
     """
-    Fires when a series of failed logins from one source IP is followed
-    by a successful login from the same IP shortly after.
+    Fires when a series of failed logins for a specific account from
+    one source IP is followed by a successful login for that same
+    account shortly after.
 
-    Specification: failures followed by a success from the same IP
-    within a short window.
+    Specification: failures followed by a success for the same
+    (source_ip, username) pair within a short window.
 
     Rationale: attacker guesses correctly on attempt N+1. Pure brute
     force (failures only) misses the moment the breach succeeds; this
-    rule explicitly captures the success that follows.
+    rule explicitly captures the success that follows. Per-username
+    matching prevents false positives when several legitimate users
+    happen to share an IP (NAT, office gateway) — three of them
+    typing typos while a fourth logs in normally is not ATO.
 
     Implementation: subject() accepts BOTH auth failures and auth
     successes for the same source IP, so the window holds the full
     sequence. evaluate() fires on a success when at least
-    `failure_threshold` failures preceded it within the window.
+    `failure_threshold` failures FOR THAT USERNAME preceded it within
+    the window.
     """
-
     name = "account_takeover"
     severity = IncidentSeverity.CRITICAL
+    
 
     def __init__(
         self,
@@ -287,13 +292,19 @@ class AccountTakeoverRule(CorrelationRule):
         if event.event_outcome != EventOutcome.SUCCESS.value:
             return None
 
-        # Count failures in the window EXCLUDING the new success itself.
-        # Note: window.events() is oldest-first; the last entry is the
-        # event we just added.
+        # Per-username matching: ATO requires failed attempts AND the
+        # successful login to target the same account. Without this,
+        # three different users typo-ing their password while a fourth
+        # logs in legitimately would trigger a false-positive ATO.
+        target_user = event.user_name
+        if target_user is None:
+            return None
+
         prior_failures = [
             e for e in list(window.events())[:-1]
             if isinstance(e, ECSEvent)
             and e.event_outcome == EventOutcome.FAILURE.value
+            and e.user_name == target_user
         ]
         if len(prior_failures) < self.failure_threshold:
             return None
