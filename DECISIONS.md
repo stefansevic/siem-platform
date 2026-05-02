@@ -621,6 +621,99 @@ will not exercise.
 
 ---
 
+---
+
+## ADR-021: Attack simulation framework with ground-truth bookkeeping
+
+**Date:** 2026-05-02
+
+**Context:** Manually triggering attacks with curl is good enough for
+a live demo, but the project needs reproducible experiments to compute
+Precision, Recall, and F1 in Week 11. Ad-hoc execution loses two things
+metrics depend on: a precise time window for each run, and an explicit
+record of what the operator intended the SIEM to detect. Without those,
+the comparison "what did the system find vs what was expected" is
+guesswork.
+
+**Decision:** Build a small `experiments/` framework around three ideas:
+
+1. **Attack scripts** as standalone CLI tools (`brute_force.py`,
+   `directory_scan.py`, `account_takeover.py`, `traffic_normal.py`).
+   Each accepts knobs over argparse and shares a base library
+   (`HttpClient` wrapper, `GroundTruthRecorder`).
+2. **Scenarios** as declarative YAML files in `scenarios/`. A scenario
+   names its expected incidents up front and lists the steps that run
+   sequentially or in parallel.
+3. **Orchestrator** (`run_scenario.py`) which executes a scenario,
+   captures start/end timestamps, and writes a single consolidated
+   ground-truth JSON to `runs/`. Individual attack scripts are invoked
+   with `--no-record` so the only persisted record per scenario is the
+   orchestrator's.
+
+Eight scenarios were defined: three "basic" (clean attacks), two with
+parallel legitimate traffic, one control group, and two negative
+controls (low-and-slow and distributed brute force) for documented
+False Negatives.
+
+**Consequences:**
+- ✅ The same scenario can be replayed any number of times. Week 11's
+  metric script reads each `runs/<id>.json`, asks the API Gateway for
+  incidents created in that window, and compares against `expected`.
+- ✅ Negative scenarios (`expected_incidents: []`) make False Positive
+  measurement explicit. Without them the control group looks healthy
+  by accident; with them, every "this should produce zero" claim is
+  testable.
+- ✅ Source-IP spoofing via `X-Forwarded-For` (with the target pointed
+  at the webapp on port 9000) lets a single host simulate distributed
+  attacks and per-user IP isolation in the control group.
+- ⚠️ The framework runs on the same machine as the SIEM, so attacker
+  and defender share a host. For a more rigorous evaluation a separate
+  attack VM would be appropriate; out of scope for the prototype.
+- ⚠️ Ground-truth runs accumulate in `runs/`. The directory is
+  gitignored; it is the operator's responsibility to clean it up
+  between experimental runs in Week 11.
+
+---
+
+## ADR-022: Account takeover requires same-user matching
+
+**Date:** 2026-05-02
+
+**Context:** During the construction of the control-group scenario in
+Week 8 a False Positive was observed: 60 seconds of legitimate traffic
+from three users sharing one source IP produced an `account_takeover`
+incident. Looking at the trigger, the rule had counted failed logins
+across all users on that IP — three of whom typed a typo and one of
+whom logged in normally — and concluded a takeover. This was wrong as
+a matter of definition: account takeover is the compromise of a
+specific account, not "some failures and some success near each other".
+
+**Decision:** The `account_takeover` rule now requires the failed
+attempts and the successful login to target the same `user_name`. The
+implementation filters `prior_failures` by
+`e.user_name == event.user_name` inside `evaluate()`, and rejects
+events whose `user_name` is unknown. Two new regression tests were
+added covering the per-user logic.
+
+**Consequences:**
+- ✅ The control-group scenario now produces zero incidents over 60
+  seconds of mixed traffic with three users sharing a source IP —
+  exactly what the metrics demand.
+- ✅ The rule now matches its English-language definition. A demo to
+  the committee no longer requires "...except when..." caveats.
+- ✅ The fix does not affect single-user attacks (basic_ato scenario
+  still triggers normally) and preserves the brute_force + ATO
+  combination on the same victim.
+- ⚠️ The fix only addresses ATO. Brute-force still groups by source
+  IP, which is the industry standard but is known to produce False
+  Positives in NAT/proxy environments where many legitimate users
+  share an IP. We chose not to switch brute_force to per-(IP, user)
+  grouping because that would lose detection of credential stuffing
+  attacks. The trade-off is documented as Future work in Chapter 7
+  alongside layered detection and UEBA proposals.
+
+---
+
 
 ## Future decisions (placeholder)
 
