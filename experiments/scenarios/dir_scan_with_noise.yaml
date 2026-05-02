@@ -1,0 +1,37 @@
+name: dir_scan_with_noise
+description: |
+  Directory-scanning attack carried out in parallel with normal traffic.
+  Verifies that legitimate page views and the occasional 404 typo from
+  real users do not contribute to the directory_scanning trigger, and
+  that exactly one such incident is created for the attacker.
+
+expected_incidents:
+  - rule: directory_scanning
+    severity: medium
+    min_count: 1
+
+steps:
+  - type: parallel
+    children:
+      - type: attack
+        script: traffic_normal.py
+        args:
+          - --target-url
+          - http://localhost:9000
+          - --duration
+          - "30"
+          - --delay
+          - "0.5"
+          - --spoof-ip-base
+          - "10.0.1.0"
+
+      - type: attack
+        script: directory_scan.py
+        args:
+          - --paths-count
+          - "30"
+          - --delay
+          - "0.5"
+
+  - type: wait
+    seconds: 3

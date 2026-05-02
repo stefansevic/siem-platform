@@ -55,6 +55,17 @@ def parse_args() -> argparse.Namespace:
             "password. Useful for triggering account_takeover."
         ),
     )
+    p.add_argument(
+        "--spoof-ip",
+        default=None,
+        help=(
+            "Override the source IP via the X-Forwarded-For header. "
+            "Required for the distributed_brute_force scenario where "
+            "multiple attacker IPs are simulated. The target URL should "
+            "point directly to the webapp (port 9000) so Nginx does not "
+            "rewrite the header."
+        ),
+    )
     return p.parse_args()
 
 
@@ -67,7 +78,11 @@ def main() -> int:
         args.username, args.attempts, args.delay,
     )
 
-    client = HttpClient(args.target_url, logger=log)
+    client = HttpClient(
+        args.target_url,
+        logger=log,
+        spoof_ip=args.spoof_ip,
+    )
 
     recorder = None
     if not args.no_record:

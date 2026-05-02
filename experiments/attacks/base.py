@@ -65,11 +65,17 @@ class HttpClient:
         timeout_seconds: float = 5.0,
         user_agent: str = "siem-attack-sim/1.0",
         logger: Optional[logging.Logger] = None,
+        spoof_ip: Optional[str] = None,
     ):
         self._base = base_url.rstrip("/")
         self._timeout = timeout_seconds
         self._session = requests.Session()
         self._session.headers["User-Agent"] = user_agent
+        # Distributed-attack simulation: when targeting the webapp directly
+        # (bypassing Nginx), the X-Forwarded-For header is the only signal
+        # the webapp uses to determine the source IP.
+        if spoof_ip:
+            self._session.headers["X-Forwarded-For"] = spoof_ip
         self._log = logger or logging.getLogger(__name__)
 
     def get(self, path: str) -> requests.Response:

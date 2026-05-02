@@ -1,0 +1,29 @@
+name: basic_ato
+description: |
+  Account-takeover scenario: 5 failed logins followed by a successful
+  one for the same account. Both brute_force and account_takeover
+  rules are expected to fire.
+
+expected_incidents:
+  - rule: brute_force
+    severity: high
+    min_count: 1
+  - rule: account_takeover
+    severity: critical
+    min_count: 1
+
+steps:
+  - type: attack
+    script: account_takeover.py
+    args:
+      - --username
+      - alice
+      - --password
+      - "Wonderland2024!"
+      - --failed
+      - "5"
+      - --delay
+      - "0.3"
+
+  - type: wait
+    seconds: 3

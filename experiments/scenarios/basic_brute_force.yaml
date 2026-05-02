@@ -1,0 +1,24 @@
+name: basic_brute_force
+description: |
+  Simple brute-force attack against a single account, no background noise.
+  Sanity check that the brute_force rule fires and incidents persist
+  through the full pipeline.
+
+expected_incidents:
+  - rule: brute_force
+    severity: high
+    min_count: 1
+
+steps:
+  - type: attack
+    script: brute_force.py
+    args:
+      - --username
+      - admin
+      - --attempts
+      - "8"
+      - --delay
+      - "0.3"
+
+  - type: wait
+    seconds: 3

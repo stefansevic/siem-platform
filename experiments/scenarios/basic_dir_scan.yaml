@@ -1,0 +1,21 @@
+name: basic_dir_scan
+description: |
+  Simple directory-scanning attack with the built-in wordlist, no
+  background noise. Sanity check for the directory_scanning rule.
+
+expected_incidents:
+  - rule: directory_scanning
+    severity: medium
+    min_count: 1
+
+steps:
+  - type: attack
+    script: directory_scan.py
+    args:
+      - --paths-count
+      - "30"
+      - --delay
+      - "0.1"
+
+  - type: wait
+    seconds: 3

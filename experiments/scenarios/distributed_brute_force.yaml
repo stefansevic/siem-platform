@@ -1,0 +1,96 @@
+name: distributed_brute_force
+description: |
+  Distributed brute-force: 5 attacker IPs each try 4 failed logins
+  against 'admin'. Total of 20 failed authentications targeting the
+  same account, but no individual IP exceeds the brute_force threshold
+  (5 within 60s).
+
+  The SIEM is expected to NOT detect this as an attack — brute_force
+  rule groups by source IP, not by username. This is a documented
+  limitation in Chapter 7 (Future work).
+
+  Mitigations discussed in the thesis: aggregate per-username rules,
+  global rate-limiters, or behavioral baselines that flag rare
+  failure-success patterns regardless of IP.
+
+  Note: The traffic is sent directly to the webapp (port 9000) so
+  the X-Forwarded-For header carries the spoofed attacker IP. Going
+  through Nginx (port 8080) would have Nginx rewrite the header.
+
+expected_incidents: []
+
+steps:
+  - type: parallel
+    children:
+      - type: attack
+        script: brute_force.py
+        args:
+          - --target-url
+          - http://localhost:9000
+          - --username
+          - admin
+          - --attempts
+          - "4"
+          - --delay
+          - "0.4"
+          - --spoof-ip
+          - "10.0.0.10"
+
+      - type: attack
+        script: brute_force.py
+        args:
+          - --target-url
+          - http://localhost:9000
+          - --username
+          - admin
+          - --attempts
+          - "4"
+          - --delay
+          - "0.4"
+          - --spoof-ip
+          - "10.0.0.11"
+
+      - type: attack
+        script: brute_force.py
+        args:
+          - --target-url
+          - http://localhost:9000
+          - --username
+          - admin
+          - --attempts
+          - "4"
+          - --delay
+          - "0.4"
+          - --spoof-ip
+          - "10.0.0.12"
+
+      - type: attack
+        script: brute_force.py
+        args:
+          - --target-url
+          - http://localhost:9000
+          - --username
+          - admin
+          - --attempts
+          - "4"
+          - --delay
+          - "0.4"
+          - --spoof-ip
+          - "10.0.0.13"
+
+      - type: attack
+        script: brute_force.py
+        args:
+          - --target-url
+          - http://localhost:9000
+          - --username
+          - admin
+          - --attempts
+          - "4"
+          - --delay
+          - "0.4"
+          - --spoof-ip
+          - "10.0.0.14"
+
+  - type: wait
+    seconds: 5
