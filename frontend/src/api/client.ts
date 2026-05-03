@@ -45,6 +45,26 @@ export async function fetchStatsTimeseries(
 
 // ----- Events -----
 
+/**
+ * Filters for the Elasticsearch-backed event search endpoint.
+ * Mirrors the parameters accepted by GET /events/search on the API
+ * Gateway. All fields are optional; an empty query returns the
+ * latest events.
+ */
+export interface EventSearchQuery {
+  q?: string;
+  source_ip?: string;
+  user_name?: string;
+  event_outcome?: 'success' | 'failure';
+  http_method?: string;
+  status_min?: number;
+  status_max?: number;
+  since?: string;   // ISO-8601 timestamp
+  until?: string;   // ISO-8601 timestamp
+  page?: number;
+  page_size?: number;
+}
+
 export interface EventQuery {
   page?: number;
   page_size?: number;
@@ -76,6 +96,19 @@ export async function fetchEventsByIds(ids: string[]): Promise<Event[]> {
   return results
     .filter((r): r is PromiseFulfilledResult<Event> => r.status === 'fulfilled')
     .map((r) => r.value);
+}
+
+/**
+ * Search events via the Elasticsearch-backed endpoint.
+ * Returns up to `page_size` matches sorted by timestamp descending.
+ */
+export async function searchEvents(
+  query: EventSearchQuery = {},
+): Promise<EventList> {
+  const { data } = await http.get<EventList>('/events/search', {
+    params: query,
+  });
+  return data;
 }
 
 // ----- Incidents -----

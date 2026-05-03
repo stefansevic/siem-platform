@@ -10,6 +10,7 @@ import { Layout } from './components/Layout';
 import { Incidents } from './pages/Incidents';
 import { Events } from './pages/Events';
 import { Rules } from './pages/Rules';
+import { Search } from './pages/Search';
 
 
 
@@ -34,7 +35,7 @@ function App() {
           <Route path="/incidents" element={<Incidents />} />
           <Route path="/events" element={<Events />} />
           <Route path="/rules" element={<Rules />} />
-          <Route path="/search"    element={<ComingSoon  name="Search" />} />
+          <Route path="/search"    element={<Search />} />
         </Route>
       </Routes>
     </BrowserRouter>
