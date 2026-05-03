@@ -11,3 +11,7 @@ pydantic-settings==2.14.0
 # Postgres (async)
 sqlalchemy[asyncio]==2.0.49
 asyncpg==0.31.0
+
+# Elasticsearch (search endpoint)
+elasticsearch==8.13.2
+aiohttp==3.10.10

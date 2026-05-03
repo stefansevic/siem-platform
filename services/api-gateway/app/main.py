@@ -44,6 +44,8 @@ from app.models import (
     StatsTimeseriesDTO,
     TimeBucketDTO,
 )
+from elasticsearch import AsyncElasticsearch
+from elasticsearch.exceptions import TransportError as ESTransportError
 
 
 # ============================================
@@ -86,8 +88,35 @@ database = Database(settings.postgres_dsn)
 async def lifespan(app: FastAPI):
     logger.info("starting api-gateway")
     await database.connect()
+
+    # Open Elasticsearch client. Stored on app.state so request handlers
+    # can reach it via dependency injection without globals.
+    es = AsyncElasticsearch(
+        settings.elasticsearch_url,
+        request_timeout=10.0,
+        retry_on_timeout=True,
+        max_retries=3,
+    )
+    try:
+        info = await es.info()
+        logger.info(
+            "Connected to Elasticsearch %s",
+            info["version"]["number"],
+        )
+        app.state.es = es
+    except Exception as exc:
+        logger.warning(
+            "Elasticsearch unreachable: %s — /events/search will return 503",
+            exc,
+        )
+        await es.close()
+        app.state.es = None
+
     yield
+
     logger.info("stopping api-gateway")
+    if app.state.es is not None:
+        await app.state.es.close()
     await database.close()
 
 
@@ -297,6 +326,137 @@ async def list_events(
 
     return EventListDTO(
         items=[EventDTO(**dict(row)) for row in rows],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
+# ============================================
+# Events search (Elasticsearch-backed)
+# ============================================
+
+@app.get("/events/search", response_model=EventListDTO)
+async def search_events(
+    q: Optional[str] = Query(
+        None,
+        description="Free-text search across user_name, url_path, and user_agent.",
+    ),
+    source_ip: Optional[str] = Query(None),
+    user_name: Optional[str] = Query(None),
+    event_outcome: Optional[str] = Query(None, pattern="^(success|failure)$"),
+    http_method: Optional[str] = Query(None),
+    status_min: Optional[int] = Query(None, ge=100, le=599),
+    status_max: Optional[int] = Query(None, ge=100, le=599),
+    since: Optional[datetime] = Query(
+        None,
+        description="ISO-8601 timestamp; only events at or after this time.",
+    ),
+    until: Optional[datetime] = Query(
+        None,
+        description="ISO-8601 timestamp; only events before this time.",
+    ),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=500),
+) -> EventListDTO:
+    """
+    Full-text and structured search over the events index family.
+
+    Routes through Elasticsearch rather than Postgres because ES is
+    purpose-built for this workload (low-latency keyword filters,
+    full-text matching, time-range aggregations). Postgres remains the
+    transactional source for incident workflow.
+
+    Returns an empty page if Elasticsearch is unreachable, with a
+    warning logged — degrades gracefully instead of returning 500.
+    """
+    es: Optional[AsyncElasticsearch] = app.state.es
+    if es is None:
+        logger.warning("ES unavailable; /events/search returning empty result")
+        return EventListDTO(items=[], total=0, page=page, page_size=page_size)
+
+    # Build the ES query body. Each filter is appended only if the
+    # caller supplied it, so an empty request matches everything.
+    filters: List[dict] = []
+    must: List[dict] = []
+
+    if source_ip:
+        filters.append({"term": {"source_ip": source_ip}})
+    if user_name:
+        filters.append({"term": {"user_name": user_name}})
+    if event_outcome:
+        filters.append({"term": {"event_outcome": event_outcome}})
+    if http_method:
+        filters.append({"term": {"http_method": http_method.upper()}})
+
+    if status_min is not None or status_max is not None:
+        rng: dict = {}
+        if status_min is not None:
+            rng["gte"] = status_min
+        if status_max is not None:
+            rng["lte"] = status_max
+        filters.append({"range": {"http_response_status_code": rng}})
+
+    if since is not None or until is not None:
+        time_range: dict = {}
+        if since is not None:
+            time_range["gte"] = since.isoformat()
+        if until is not None:
+            time_range["lt"] = until.isoformat()
+        filters.append({"range": {"timestamp": time_range}})
+
+    if q:
+        # Free text matches against multiple fields. user_name and
+        # url_path are searched as both keyword (exact) and text
+        # (partial) thanks to the multi-field mapping in the template.
+        must.append({
+            "multi_match": {
+                "query": q,
+                "fields": ["user_name^2", "url_path", "user_agent"],
+                "type": "best_fields",
+            }
+        })
+
+    body = {
+        "query": {
+            "bool": {
+                "must": must if must else [{"match_all": {}}],
+                "filter": filters,
+            }
+        },
+        "sort": [{"timestamp": {"order": "desc"}}],
+        "from": (page - 1) * page_size,
+        "size": page_size,
+        "track_total_hits": True,
+    }
+
+    try:
+        response = await es.search(index="events-*", body=body)
+    except ESTransportError as exc:
+        logger.warning("ES search failed: %s", exc)
+        return EventListDTO(items=[], total=0, page=page, page_size=page_size)
+
+    total = response["hits"]["total"]["value"]
+    items: List[EventDTO] = []
+    for hit in response["hits"]["hits"]:
+        src = hit["_source"]
+        items.append(EventDTO(
+            id=UUID(src["event_id"]),
+            timestamp=datetime.fromisoformat(src["timestamp"]),
+            event_category=src.get("event_category", ""),
+            event_outcome=src.get("event_outcome"),
+            event_action=src.get("event_action"),
+            source_ip=src.get("source_ip"),
+            user_name=src.get("user_name"),
+            http_method=src.get("http_method"),
+            url_path=src.get("url_path"),
+            http_response_status_code=src.get("http_response_status_code"),
+            user_agent=src.get("user_agent"),
+            log_source=src.get("log_source", "unknown"),
+        ))
+
+    return EventListDTO(
+        items=items,
         total=total,
         page=page,
         page_size=page_size,

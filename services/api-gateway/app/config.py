@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     postgres_db: str = Field(alias="POSTGRES_DB")
     postgres_host: str = Field(default="postgres", alias="POSTGRES_HOST")
     postgres_port: int = Field(default=5432, alias="POSTGRES_PORT")
+    # ----- Elasticsearch (event search) -----
+    elasticsearch_url: str = Field(
+        default="http://elasticsearch:9200",
+        alias="ELASTICSEARCH_URL",
+    )
 
     # ----- HTTP server -----
     api_host: str = Field(default="0.0.0.0", alias="API_HOST")
