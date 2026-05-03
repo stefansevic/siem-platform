@@ -782,7 +782,61 @@ which Postgres alone cannot honestly meet at scale.
 
 ---
 
+---
 
+## ADR-024: Search page with URL-driven filter state
+
+**Date:** 2026-05-03
+
+**Context:** Week 9 added an Elasticsearch-backed `/events/search`
+endpoint to the API Gateway. The frontend needed a corresponding
+operator-facing UI to exercise it. The placeholder Search page from
+Week 6 had to be replaced with a real form, results table, and
+pagination.
+
+Beyond the basic plumbing, the design question was where to keep the
+filter state — entirely inside the React component, or reflected in
+the URL via query parameters.
+
+**Decision:** Build the page around `useSearchParams` from React
+Router. Filter values flow:
+
+    form state  ─submit─▶  URL params  ─effect─▶  fetch + render
+
+Submitting the form rewrites the URL; the URL drives the data
+fetch via a `useEffect` that depends on the submitted state and
+page number. A separate "pending" form state captures keystrokes
+without firing requests on every input change.
+
+The page rejects empty searches: at least one filter must be set
+before the request goes out. This is consistent with how Splunk
+and Kibana behave — an unconstrained query against an unbounded
+log index is not a useful default.
+
+**Consequences:**
+- ✅ Searches are bookmarkable and shareable. A copy-pasted URL
+  reproduces the exact same filtered view, which matters for
+  the demo: "look at this anomaly" can be a link.
+- ✅ Browser back/forward navigates between previous searches with
+  no extra code — the URL is already the source of truth.
+- ✅ Refreshing the page does not reset filters.
+- ✅ Reuses existing components (EmptyState, RefreshIndicator) so
+  the search page feels consistent with Events and Incidents
+  rather than introducing a new visual idiom.
+- ⚠️ Authentication-only events (event_category="authentication")
+  do not carry HTTP fields, so the Method/Path/Status columns are
+  blank for those rows. This is correct per the data model but
+  may look like a UI bug at first glance. Considered acceptable;
+  alternative would be to render two different table layouts
+  depending on event_category, which is more code for marginal
+  value.
+- ⚠️ Free-text `q` queries multi-match across user_name, url_path,
+  and user_agent. Adding more searchable fields requires both a
+  template change in `shared/elasticsearch_index.py` and a
+  matching change in the API Gateway query body — two places
+  must move together.
+
+---
 
 ## Future decisions (placeholder)
 
