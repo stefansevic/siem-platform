@@ -714,6 +714,75 @@ added covering the per-user logic.
 
 ---
 
+---
+
+## ADR-023: Elasticsearch dual-write for event search
+
+**Date:** 2026-05-03
+
+**Context:** Postgres handles transactional incident workflow well —
+ACID for status changes, foreign keys for incident-event links — but
+it is the wrong tool for free-text search and time-range aggregations
+over an ever-growing log table. SOC operators need to answer questions
+like "show me every authentication failure for user `bob` in the last
+24 hours involving paths matching `/admin*`" in milliseconds, and a
+LIKE query against a Postgres BIGINT-keyed events table does not
+deliver that.
+
+The thesis specification asks for "fast search across the event log"
+which Postgres alone cannot honestly meet at scale.
+
+**Decision:** Adopt a hybrid storage design.
+
+- **Postgres** remains the source of truth for events and incidents.
+  Every event written to Postgres still drives correlation rules,
+  alert workflow, and dedup. No behavioural change for incidents.
+- **Elasticsearch 8.13** is added as a parallel write target, used
+  only for read-side search. The Normalizer service writes each new
+  (non-duplicate) event to a daily index `events-YYYY.MM.DD` after
+  the Postgres insert succeeds. Daily indexing follows Elastic's
+  recommendation for time-series log data and makes retention a
+  trivial `DELETE /events-2026.04.*`.
+- An **index template** (`shared/elasticsearch_index.py`) is applied
+  by the Normalizer at startup. Field types are pinned explicitly:
+  IP addresses use `ip` (CIDR queries), timestamps use `date`,
+  identifiers use `keyword`, free-text fields like `user_agent` use
+  `text` with a `.keyword` sub-field for exact matching.
+- A new endpoint **`GET /events/search`** in the API Gateway routes
+  to ES. Filters mirror existing `/events` semantics; an extra `q`
+  parameter does multi-field full-text matching.
+- ES failures are **non-fatal** by default. The Normalizer logs the
+  failure and keeps writing to Postgres; the API Gateway falls back
+  to empty results with a warning. `ELASTICSEARCH_REQUIRED=true` can
+  flip this for environments where degraded search is unacceptable.
+
+**Consequences:**
+- ✅ The architecture matches industrial SIEM practice (Elastic SIEM,
+  Splunk, ELK stack): transactional store for workflow, search engine
+  for analytics. The thesis can argue this in Chapter 3 (Design) with
+  references rather than presenting it as a novel choice.
+- ✅ Search performance is no longer bounded by Postgres. ES returns
+  filtered + sorted hits over the events index in low single-digit
+  milliseconds for the prototype's data volumes.
+- ✅ The dual-write happens in one place (`EventWriter.insert_event`)
+  and is gated by the same idempotency check as the Postgres write,
+  so duplicates do not double-index.
+- ⚠️ Two stores mean two failure modes. The Normalizer logs ES errors
+  and keeps going; an operator must monitor the Elasticsearch health
+  separately. Acceptable for a prototype; production would add a
+  reconciliation job that replays missing event_ids from Postgres.
+- ⚠️ Daily indices created lazily on the first event of the day. No
+  ILM (Index Lifecycle Management) policy is configured — old
+  indices live forever until someone deletes them. Documented as
+  Future work; the prototype's data volume does not justify the
+  added complexity.
+- ⚠️ Security disabled (`xpack.security.enabled=false`). Acceptable
+  for a localhost demo; a production deployment must enable TLS,
+  basic auth, and role-based index access.
+
+---
+
+
 
 ## Future decisions (placeholder)
 
