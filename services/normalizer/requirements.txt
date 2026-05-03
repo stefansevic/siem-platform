@@ -12,3 +12,9 @@ asyncpg==0.31.0
 
 # Redis (async included in main package since 4.2.x)
 redis==7.4.0
+
+# Elasticsearch (dual-write for event search)
+elasticsearch==8.13.2
+
+# Required by AsyncElasticsearch transport
+aiohttp==3.10.10

@@ -54,6 +54,40 @@ services:
     networks:
       - siem-net
 
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+    container_name: siem-elasticsearch
+    restart: unless-stopped
+    environment:
+      # Single-node cluster — sufficient for the prototype, no replicas
+      discovery.type: single-node
+      # Security disabled for the demo: no SSL, no auth. Enabling these
+      # would require certificate provisioning and basic-auth headers
+      # in every client; out of scope for the thesis prototype.
+      xpack.security.enabled: "false"
+      xpack.security.http.ssl.enabled: "false"
+      # Memory caps so ES does not eat the dev machine. ES default is
+      # 50% of host RAM which is wasteful for a demo workload.
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+      # Single-node cluster does not need bootstrap checks
+      bootstrap.memory_lock: "false"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 6
+      start_period: 30s
+    networks:
+      - siem-net
+
   # ----------------------------------------
   # LOG SOURCES
   # ----------------------------------------
@@ -237,3 +271,4 @@ volumes:
   postgres_data:
   redis_data:
   nginx_logs:
+  elasticsearch_data:

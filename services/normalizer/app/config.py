@@ -47,3 +47,16 @@ class Settings(BaseSettings):
     @property
     def redis_url(self) -> str:
         return f"redis://{self.redis_host}:{self.redis_port}/{self.redis_db}"
+
+    # ----- Elasticsearch (Week 9: dual-write for event search) -----
+    elasticsearch_url: str = Field(
+        default="http://elasticsearch:9200",
+        alias="ELASTICSEARCH_URL",
+    )
+    # When True, ES write failures cause the event to be skipped from ES
+    # but still written to Postgres. When False, ES failures are logged
+    # only — Postgres remains the source of truth.
+    elasticsearch_required: bool = Field(
+        default=False,
+        alias="ELASTICSEARCH_REQUIRED",
+    )

@@ -27,8 +27,11 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import INET, JSONB, TIMESTAMP, UUID, insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncConnection, create_async_engine
-
 from shared.ecs_models import ECSEvent
+from elasticsearch import AsyncElasticsearch
+from elasticsearch.exceptions import TransportError as ESTransportError
+from shared.elasticsearch_index import daily_index_name
+
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +106,15 @@ class EventWriter:
         await writer.close()
     """
 
-    def __init__(self, dsn: str, *, pool_size: int = 5, echo: bool = False):
+    def __init__(
+        self,
+        dsn: str,
+        *,
+        pool_size: int = 5,
+        echo: bool = False,
+        elasticsearch_url: Optional[str] = None,
+        elasticsearch_required: bool = False,
+    ):
         self._dsn = dsn
         self._engine: Optional[AsyncEngine] = create_async_engine(
             dsn,
@@ -112,16 +123,48 @@ class EventWriter:
             pool_pre_ping=True,  # cheap liveness check before checkout
             echo=echo,
         )
+        # ES is optional. If unreachable, dual-write degrades to
+        # Postgres-only writes; Postgres is the source of truth so the
+        # SIEM keeps detecting incidents even without ES.
+        self._es_url = elasticsearch_url
+        self._es_required = elasticsearch_required
+        self._es: Optional[AsyncElasticsearch] = None
 
     async def connect(self) -> None:
-        """Verify connectivity by issuing SELECT 1."""
+        """Verify connectivity by issuing SELECT 1, then optionally
+        connect to Elasticsearch for dual-write."""
         assert self._engine is not None
         async with self._engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
-        logger.info("EventWriter connected")
+        logger.info("EventWriter connected to Postgres")
+
+        if self._es_url:
+            self._es = AsyncElasticsearch(
+                self._es_url,
+                request_timeout=10.0,
+                retry_on_timeout=True,
+                max_retries=3,
+            )
+            try:
+                info = await self._es.info()
+                logger.info(
+                    "EventWriter connected to Elasticsearch %s",
+                    info["version"]["number"],
+                )
+            except Exception as exc:
+                logger.warning("Elasticsearch unreachable: %s", exc)
+                if self._es_required:
+                    raise
+                # Drop the client so insert_event skips ES writes
+                await self._es.close()
+                self._es = None
 
     async def close(self) -> None:
-        """Dispose the engine and its pool."""
+        """Dispose the engine, its pool, and the ES client."""
+        if self._es is not None:
+            await self._es.close()
+            self._es = None
+            logger.info("Elasticsearch client closed")
         if self._engine is not None:
             await self._engine.dispose()
             self._engine = None
@@ -135,6 +178,11 @@ class EventWriter:
         """
         Insert one ECSEvent. Returns True if a new row was written,
         False if a row with the same idempotency_key already exists.
+
+        On a successful Postgres insert (i.e. the event is not a
+        duplicate), the same event is also indexed in Elasticsearch.
+        ES failures are logged but do not raise — Postgres remains
+        the source of truth.
         """
         if self._engine is None:
             raise RuntimeError("EventWriter is not connected")
@@ -146,7 +194,58 @@ class EventWriter:
         async with self._engine.begin() as conn:  # type: AsyncConnection
             result = await conn.execute(stmt)
             inserted = result.rowcount == 1
-            return inserted
+
+        # Dual-write to ES on new events only. Duplicates are skipped
+        # because they will already be in ES from the original write.
+        if inserted and self._es is not None:
+            await self._index_event_in_es(event)
+
+        return inserted
+
+    async def _index_event_in_es(self, event: ECSEvent) -> None:
+        """
+        Send the event to the daily ES index. Failures are swallowed
+        with a warning — ES is best-effort, Postgres is the truth.
+        """
+        index = daily_index_name(event.timestamp)
+        document = {
+            "event_id": str(event.id),
+            "timestamp": event.timestamp.isoformat(),
+            "event_kind": getattr(event, "event_kind", None),
+            "event_category": event.event_category,
+            "event_action": event.event_action,
+            "event_outcome": event.event_outcome,
+            "source_ip": str(event.source_ip) if event.source_ip else None,
+            "user_name": event.user_name,
+            "user_agent": getattr(event, "user_agent", None),
+            "http_method": event.http_method,
+            "url_path": getattr(event, "url_path", None),
+            "http_response_status_code": getattr(
+                event, "http_response_status_code", None,
+            ),
+            "log_source": getattr(event, "log_source", None),
+            "host_name": getattr(event, "host_name", None),
+            "ingested_at": getattr(event, "ingested_at", event.timestamp).isoformat(),
+        }
+        # Drop None values so ES does not store explicit nulls
+        document = {k: v for k, v in document.items() if v is not None}
+
+        try:
+            await self._es.index(
+                index=index,
+                id=str(event.id),
+                document=document,
+            )
+        except ESTransportError as exc:
+            logger.warning(
+                "Failed to index event %s in Elasticsearch: %s",
+                event.id, exc,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Unexpected error indexing event %s: %s",
+                event.id, exc,
+            )
 
     @staticmethod
     def _event_to_row(event: ECSEvent, idempotency_key: str) -> dict:
