@@ -1,0 +1,45 @@
+name: nat_false_positive
+description: |
+  NAT environment false positive: 3 different users (alice, bob, carol)
+  each typo their password 2 times from a shared source IP. Total: 6
+  failed authentications across 3 distinct accounts.
+  
+  brute_force rule groups by source_ip only (industrial standard), so
+  the SIEM WILL fire even though no single account is being attacked.
+  This is the documented NAT/proxy limitation discussed in ADR-022 and
+  Chapter 7 (Future work). Mitigations: per-(IP, user) grouping or UEBA.
+
+expected_incidents: []
+
+steps:
+  - type: parallel
+    children:
+      - type: attack
+        script: brute_force.py
+        args:
+          - --username
+          - alice
+          - --attempts
+          - "2"
+          - --delay
+          - "0.4"
+      - type: attack
+        script: brute_force.py
+        args:
+          - --username
+          - bob
+          - --attempts
+          - "2"
+          - --delay
+          - "0.4"
+      - type: attack
+        script: brute_force.py
+        args:
+          - --username
+          - carol
+          - --attempts
+          - "2"
+          - --delay
+          - "0.4"
+  - type: wait
+    seconds: 5

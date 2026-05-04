@@ -1,0 +1,15 @@
+# Experiment suite configuration.
+# Maps scenario name (without .yaml extension) to number of runs.
+runs_per_scenario:
+  basic_brute_force: 10
+  basic_dir_scan: 10
+  basic_ato: 10
+  only_normal_traffic: 10
+  brute_force_with_noise: 5
+  dir_scan_with_noise: 5
+  low_and_slow: 3
+  distributed_brute_force: 3
+  near_threshold_brute_force: 5
+  slow_burst_brute_force: 5
+  nat_false_positive: 5
+  mixed_legitimate_and_attack: 5

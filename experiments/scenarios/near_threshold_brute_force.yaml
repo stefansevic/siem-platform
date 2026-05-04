@@ -1,0 +1,20 @@
+name: near_threshold_brute_force
+description: |
+  Boundary case: 4 failed login attempts (one below brute_force threshold of 5).
+  The SIEM must NOT detect this as an attack. Tests that the threshold logic
+  is exact and does not fire on subthreshold activity.
+
+expected_incidents: []
+
+steps:
+  - type: attack
+    script: brute_force.py
+    args:
+      - --username
+      - alice
+      - --attempts
+      - "4"
+      - --delay
+      - "0.5"
+  - type: wait
+    seconds: 5

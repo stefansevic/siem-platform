@@ -1,0 +1,42 @@
+name: mixed_legitimate_and_attack
+description: |
+  Realistic mixed scenario: a brute_force attack runs in parallel with
+  legitimate user traffic (3 users on distinct spoofed IPs).
+  
+  The SIEM should detect the brute_force attack on admin (TP) and NOT
+  generate any other incidents from the noise. Validates that legitimate
+  traffic does not trigger directory_scanning or account_takeover false
+  positives.
+
+expected_incidents:
+  - rule: brute_force
+    severity: high
+    min_count: 1
+
+steps:
+  - type: parallel
+    children:
+      - type: attack
+        script: brute_force.py
+        args:
+          - --username
+          - admin
+          - --attempts
+          - "8"
+          - --delay
+          - "0.3"
+      - type: attack
+        script: traffic_normal.py
+        args:
+          - --target-url
+          - http://localhost:9000
+          - --duration
+          - "30"
+          - --delay
+          - "0.5"
+          - --users
+          - "3"
+          - --spoof-ip-base
+          - "10.0.2.0"
+  - type: wait
+    seconds: 5

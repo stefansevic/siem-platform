@@ -1,0 +1,22 @@
+name: slow_burst_brute_force
+description: |
+  Sliding-window edge case: 6 failed login attempts spread over 90 seconds
+  (15s between each). The brute_force window is 60s, so within any sliding
+  60s window there are at most 4-5 failures.
+  Whether this triggers depends on exact timing of when the rule re-evaluates.
+  Documents sensitivity of static-window correlation to attack pacing.
+
+expected_incidents: []
+
+steps:
+  - type: attack
+    script: brute_force.py
+    args:
+      - --username
+      - bob
+      - --attempts
+      - "6"
+      - --delay
+      - "16"
+  - type: wait
+    seconds: 5

@@ -73,27 +73,67 @@ def parse_args() -> argparse.Namespace:
 
 def reset_database() -> None:
     """
-    Wipe events + incidents via docker compose exec.
-    Uses the env variables already configured in .env.
-    """
-    print("[orchestrator] Resetting Postgres events + incidents...")
-    user = os.environ.get("POSTGRES_USER", "siem")
-    db = os.environ.get("POSTGRES_DB", "siem")
-    cmd = [
-        "docker", "compose", "exec", "-T", "postgres",
-        "psql", "-U", user, "-d", db,
-        "-c", "DELETE FROM events; DELETE FROM incidents;",
-    ]
-    result = subprocess.run(
-        cmd,
-        cwd=EXPERIMENTS_DIR.parent,  # repo root, where docker-compose.yml lives
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        print("[orchestrator] WARNING: db reset failed:")
-        print(result.stderr)
+    Full pipeline reset for clean experimental runs:
+        1. TRUNCATE Postgres events + incidents
+        2. DELETE all events-* indices in Elasticsearch
+        3. FLUSHDB Redis (clears streams + consumer groups)
+        4. Restart normalizer + correlator to recreate consumer groups
+           and clear in-memory sliding window state.
 
+    Fails fast — any subprocess error aborts the run.
+    """
+    print("[orchestrator] Full reset: postgres + elasticsearch + redis + services...")
+    repo_root = EXPERIMENTS_DIR.parent
+    user = os.environ.get("POSTGRES_USER", "siem_admin")
+    db = os.environ.get("POSTGRES_DB", "siem")
+
+    def _run(cmd: list[str], desc: str) -> None:
+        result = subprocess.run(
+            cmd, cwd=repo_root, capture_output=True, text=True
+        )
+        if result.returncode != 0:
+            print(f"[orchestrator] FATAL: {desc} failed")
+            print(result.stderr)
+            sys.exit(1)
+
+    # 1. Postgres
+    _run(
+        [
+            "docker", "compose", "exec", "-T", "postgres",
+            "psql", "-U", user, "-d", db,
+            "-c", "TRUNCATE incidents, events RESTART IDENTITY CASCADE;",
+        ],
+        "postgres truncate",
+    )
+
+    # 2. Elasticsearch — list then delete one-by-one (wildcards blocked)
+    list_result = subprocess.run(
+        ["curl", "-s", "http://localhost:9200/_cat/indices/events-*?h=index"],
+        capture_output=True, text=True,
+    )
+    for idx in list_result.stdout.split():
+        idx = idx.strip()
+        if idx:
+            _run(
+                ["curl", "-s", "-X", "DELETE", f"http://localhost:9200/{idx}"],
+                f"es delete {idx}",
+            )
+
+    # 3. Redis
+    _run(
+        ["docker", "compose", "exec", "-T", "redis", "redis-cli", "FLUSHDB"],
+        "redis flushdb",
+    )
+
+    # 4. Restart services that hold state or consumer-group registrations
+    _run(
+        ["docker", "compose", "restart", "normalizer", "correlator"],
+        "service restart",
+    )
+
+    # Give services time to reconnect and recreate consumer groups
+    time.sleep(3)
+    print("[orchestrator] Reset complete.")
 
 # ============================================
 # Step execution
@@ -182,13 +222,22 @@ def write_ground_truth(
 ) -> Path:
     """
     Write a consolidated ground-truth record covering the whole run.
-
     Individual attack scripts are invoked with --no-record by the
-    orchestrator, so the only record produced is this one. Used by
-    compute_metrics.py (Week 11) to evaluate Precision / Recall / F1.
+    orchestrator, so the only record produced is this one.
+
+    The function also queries the API Gateway for incidents detected
+    inside the run window and embeds them as `actual_incidents`. This
+    locks in the result before the next run's --reset-db wipes the DB.
+    Used by compute_metrics.py (Week 11) to evaluate Precision/Recall/F1.
     """
     RUNS_DIR.mkdir(parents=True, exist_ok=True)
     run_id = make_run_id()
+
+    # Give Alert Manager time to flush incidents to Postgres before we query.
+    print("[orchestrator] Waiting 3.0s for incidents to settle...")
+    time.sleep(3.0)
+
+    actual_incidents = _fetch_incidents_for_window(started_at, ended_at)
 
     record = {
         "run_id": run_id,
@@ -198,12 +247,45 @@ def write_ground_truth(
         "ended_at": ended_at,
         "target_base_url": target_base_url,
         "expected": scenario.get("expected_incidents", []),
+        "actual_incidents": actual_incidents,
         "description": (scenario.get("description") or "").strip(),
     }
-
     out = RUNS_DIR / f"{run_id}.json"
     out.write_text(json.dumps(record, indent=2, ensure_ascii=False))
     return out
+
+
+def _fetch_incidents_for_window(started_at: str, ended_at: str) -> list[dict]:
+    """Query API Gateway for incidents detected within [started_at, ended_at]
+    with a 5-second tolerance on each side. Returns [] on failure (logged)."""
+    import urllib.request
+    import urllib.parse
+    import urllib.error
+    from datetime import timedelta
+
+    api_url = os.environ.get("API_GATEWAY_URL", "http://localhost:8005")
+    tolerance = timedelta(seconds=5)
+
+    def _parse(s: str):
+        if s.endswith("Z"):
+            s = s[:-1] + "+00:00"
+        return datetime.fromisoformat(s)
+
+    after = (_parse(started_at) - tolerance).isoformat()
+    before = (_parse(ended_at) + tolerance).isoformat()
+    qs = urllib.parse.urlencode({
+        "detected_after": after,
+        "detected_before": before,
+        "page_size": 500,
+    })
+    url = f"{api_url}/incidents?{qs}"
+    try:
+        with urllib.request.urlopen(url, timeout=10) as resp:
+            data = json.loads(resp.read())
+        return data.get("items", [])
+    except (urllib.error.URLError, urllib.error.HTTPError, OSError) as exc:
+        print(f"[orchestrator] WARNING: incident fetch failed: {exc}")
+        return []
 
 
 # ============================================

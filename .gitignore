@@ -141,3 +141,6 @@ dumps/
 # Simulation outputs
 simulations/output/
 simulations/results/.venv*/
+experiments/runs_archive_week8/
+experiments/results/
+experiments/run_all.log
