@@ -495,6 +495,8 @@ async def list_incidents(
     rule_name: Optional[str] = None,
     source_ip: Optional[str] = None,
     since_minutes: Optional[int] = Query(default=None, ge=1, le=10080),
+    detected_after: Optional[datetime] = None,
+    detected_before: Optional[datetime] = None,
 ) -> IncidentListDTO:
     where_parts: List[str] = []
     params: dict = {}
@@ -514,6 +516,12 @@ async def list_incidents(
     if since_minutes is not None:
         where_parts.append("detected_at >= :since")
         params["since"] = datetime.now(timezone.utc) - timedelta(minutes=since_minutes)
+    if detected_after is not None:
+        where_parts.append("detected_at >= :detected_after")
+        params["detected_after"] = detected_after
+    if detected_before is not None:
+        where_parts.append("detected_at <= :detected_before")
+        params["detected_before"] = detected_before
 
     where_clause = ("WHERE " + " AND ".join(where_parts)) if where_parts else ""
     offset = (page - 1) * page_size
