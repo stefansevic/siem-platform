@@ -84,13 +84,10 @@ _configure_logging(settings.log_level)
 database = Database(settings.postgres_dsn)
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    logger.info("starting api-gateway")
-    await database.connect()
-
-    # Open Elasticsearch client. Stored on app.state so request handlers
-    # can reach it via dependency injection without globals.
+async def _open_es_client() -> Optional[AsyncElasticsearch]:
+    """Try to open and verify an Elasticsearch client.
+    Returns None if ES is unreachable. Caller takes ownership of the
+    returned client and is responsible for eventually closing it."""
     es = AsyncElasticsearch(
         settings.elasticsearch_url,
         request_timeout=10.0,
@@ -99,18 +96,22 @@ async def lifespan(app: FastAPI):
     )
     try:
         info = await es.info()
-        logger.info(
-            "Connected to Elasticsearch %s",
-            info["version"]["number"],
-        )
-        app.state.es = es
+        logger.info("Connected to Elasticsearch %s", info["version"]["number"])
+        return es
     except Exception as exc:
-        logger.warning(
-            "Elasticsearch unreachable: %s — /events/search will return 503",
-            exc,
-        )
+        logger.warning("Elasticsearch unreachable: %s", exc)
         await es.close()
-        app.state.es = None
+        return None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("starting api-gateway")
+    await database.connect()
+
+    # Open Elasticsearch client. Stored on app.state so request handlers
+    # can reach it via dependency injection without globals.
+    app.state.es = await _open_es_client()
 
     yield
 
@@ -372,8 +373,13 @@ async def search_events(
     """
     es: Optional[AsyncElasticsearch] = app.state.es
     if es is None:
-        logger.warning("ES unavailable; /events/search returning empty result")
-        return EventListDTO(items=[], total=0, page=page, page_size=page_size)
+        # Lazy reconnect — ES may have been down at startup but is back now.
+        logger.info("ES client missing; attempting reconnect")
+        es = await _open_es_client()
+        if es is None:
+            logger.warning("ES still unavailable; /events/search returning empty result")
+            return EventListDTO(items=[], total=0, page=page, page_size=page_size)
+        app.state.es = es
 
     # Build the ES query body. Each filter is appended only if the
     # caller supplied it, so an empty request matches everything.
