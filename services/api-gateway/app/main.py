@@ -624,21 +624,21 @@ async def list_rules() -> List[RuleDTO]:
     return [
         RuleDTO(
             name="brute_force",
-            description="Multiple failed authentication attempts from the same IP within a short window.",
+            description="5 or more failed authentications from the same source IP within 60 seconds. Grouped by IP per industry convention; may produce false positives in NAT environments.",
             severity="high",
             threshold=5,
             window_seconds=60,
         ),
         RuleDTO(
             name="directory_scanning",
-            description="Many distinct 404 paths probed from the same IP.",
+            description="20 or more distinct 404 paths probed from the same source IP within 60 seconds, indicating automated resource enumeration.",
             severity="medium",
             threshold=20,
             window_seconds=60,
         ),
         RuleDTO(
             name="account_takeover",
-            description="A series of failed logins followed by a successful one from the same IP.",
+            description="5 or more failed authentications followed by a successful login for the same user from the same source IP, within 600 seconds.",
             severity="critical",
             threshold=5,
             window_seconds=600,

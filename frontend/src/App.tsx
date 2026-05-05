@@ -12,20 +12,6 @@ import { Events } from './pages/Events';
 import { Rules } from './pages/Rules';
 import { Search } from './pages/Search';
 
-
-
-function ComingSoon({ name }: { name: string }) {
-  return (
-    <div>
-      <h1 className="text-2xl font-semibold mb-2">{name}</h1>
-      <p className="text-[var(--color-muted)]">
-        This page will be implemented when Elasticsearch is integrated
-        in week 9. For now, use the Events page to inspect raw activity.
-      </p>
-    </div>
-  );
-}
-
 function App() {
   return (
     <BrowserRouter>
