@@ -169,7 +169,3 @@ DECISIONS.md      24 ADRs covering all architectural choices
 - `docs/experiments_log.md` — results and findings from the 76-run suite
 - `docs/experiments_methodology_sr.md` — methodology, Serbian translation
 - `docs/experiments_log_sr.md` — results log, Serbian translation
-
-## License
-
-See `LICENSE`.
