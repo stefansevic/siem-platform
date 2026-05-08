@@ -11,16 +11,22 @@ takeover), and surfaces incidents on a React dashboard.
 
 ## Quick Start
 
-Prerequisites: Docker Desktop with Docker Compose v2.
+Prerequisites: Docker Desktop with Docker Compose v2, Python 3.11+.
 
 ```bash
 git clone https://github.com/stefansevic/siem-platform.git
 cd siem-platform
-cp .env.example .env
+./scripts/setup.sh
 docker compose up -d --build
 ```
 
-The first build takes 3–5 minutes. Once all services report healthy:
+The setup script verifies tooling, creates `.env` from
+`.env.example`, and installs the Python packages used by the
+experiment framework (`requests`, `pyyaml`, `matplotlib`, `numpy`).
+It is idempotent — safe to re-run.
+
+The first Docker build takes 3–5 minutes. Once all services report
+healthy:
 
 | Component        | URL                               |
 |------------------|-----------------------------------|
@@ -103,24 +109,29 @@ port or override it in `.env`.
 
 **`docker compose up` fails on first run.** Elasticsearch needs
 `vm.max_map_count >= 262144`. On Linux:
+
 ```bash
 sudo sysctl -w vm.max_map_count=262144
 ```
+
 On Docker Desktop (Windows/macOS), increase memory allocation to at
 least 4 GB in Settings → Resources.
 
 **Dashboard shows no data.** Check that all containers are healthy
 (`docker compose ps`) and that the demo webapp received traffic.
 Generate some via:
+
 ```bash
 python3 experiments/attacks/traffic_normal.py --duration 30
 ```
 
 **Search page returns no results.** The API Gateway's Elasticsearch
 client may have failed to connect at startup. Restart the gateway:
+
 ```bash
 docker compose restart api-gateway
 ```
+
 (Lazy reconnect was added in a recent fix; this should self-heal,
 but the manual restart works as a fallback.)
 
@@ -131,7 +142,7 @@ To wipe all events, incidents, and Elasticsearch indices:
 ```bash
 docker compose exec -T postgres psql -U siem_admin -d siem \
   -c "TRUNCATE incidents, events RESTART IDENTITY CASCADE;"
-curl -X DELETE "http://localhost:9200/events-2026.05.04"
+curl -X DELETE "http://localhost:9200/events-$(date +%Y.%m.%d)"
 docker compose exec -T redis redis-cli FLUSHDB
 docker compose restart normalizer correlator alert-manager
 ```
@@ -147,6 +158,7 @@ infrastructure/   Postgres migrations, Nginx config, Redis config
 log-sources/      demo webapp (FastAPI)
 frontend/         React + Vite + TypeScript dashboard
 experiments/      attack scripts, scenarios, orchestrators, plots
+scripts/          setup and operational helpers
 docs/             methodology and results documentation
 DECISIONS.md      24 ADRs covering all architectural choices
 
@@ -157,3 +169,7 @@ DECISIONS.md      24 ADRs covering all architectural choices
 - `docs/experiments_log.md` — results and findings from the 76-run suite
 - `docs/experiments_methodology_sr.md` — methodology, Serbian translation
 - `docs/experiments_log_sr.md` — results log, Serbian translation
+
+## License
+
+See `LICENSE`.

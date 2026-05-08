@@ -152,7 +152,7 @@ def run_attack_step(step: dict) -> int:
     # for the whole scenario.
     args = args + ["--no-record"]
 
-    cmd = ["python3.11", str(script_path), *args]
+    cmd = [sys.executable, str(script_path), *args]
     print(f"[orchestrator] >> {script} {' '.join(args)}")
 
     proc = subprocess.run(cmd)
