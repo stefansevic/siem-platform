@@ -1,0 +1,11 @@
+{
+  "run_id": "20260504T143110Z-d2a436",
+  "scenario": "slow_burst_brute_force",
+  "scenario_file": "scenarios/slow_burst_brute_force.yaml",
+  "started_at": "2026-05-04T14:29:30.299709+00:00",
+  "ended_at": "2026-05-04T14:31:10.302011+00:00",
+  "target_base_url": "http://localhost:8080",
+  "expected": [],
+  "actual_incidents": [],
+  "description": "Sliding-window edge case: 6 failed login attempts spread over 90 seconds\n(15s between each). The brute_force window is 60s, so within any sliding\n60s window there are at most 4-5 failures.\nWhether this triggers depends on exact timing of when the rule re-evaluates.\nDocuments sensitivity of static-window correlation to attack pacing."
+}

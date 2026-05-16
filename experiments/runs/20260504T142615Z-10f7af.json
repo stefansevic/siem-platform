@@ -1,0 +1,11 @@
+{
+  "run_id": "20260504T142615Z-10f7af",
+  "scenario": "low_and_slow",
+  "scenario_file": "scenarios/low_and_slow.yaml",
+  "started_at": "2026-05-04T14:25:17.379817+00:00",
+  "ended_at": "2026-05-04T14:26:15.909866+00:00",
+  "target_base_url": "http://localhost:8080",
+  "expected": [],
+  "actual_incidents": [],
+  "description": "Low-and-slow attack: 4 failed login attempts spread over 60 seconds.\nEach individual rate-limited probe stays below the brute_force\nthreshold (5 failures within 60s). The SIEM must NOT detect this\nas an attack — that is the expected limitation of threshold-based\nrules.\n\nThis scenario is documented as a known False Negative in Chapter 7\n(Future work) of the thesis. Possible mitigations include\nML-based detection, dynamic baselining (Datadog-style), or\nlonger aggregation windows with lower thresholds."
+}

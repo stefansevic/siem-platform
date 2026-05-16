@@ -1,0 +1,11 @@
+{
+  "run_id": "20260504T142923Z-0fb94b",
+  "scenario": "near_threshold_brute_force",
+  "scenario_file": "scenarios/near_threshold_brute_force.yaml",
+  "started_at": "2026-05-04T14:29:16.850362+00:00",
+  "ended_at": "2026-05-04T14:29:23.937056+00:00",
+  "target_base_url": "http://localhost:8080",
+  "expected": [],
+  "actual_incidents": [],
+  "description": "Boundary case: 4 failed login attempts (one below brute_force threshold of 5).\nThe SIEM must NOT detect this as an attack. Tests that the threshold logic\nis exact and does not fire on subthreshold activity."
+}

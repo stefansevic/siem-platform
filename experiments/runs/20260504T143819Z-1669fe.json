@@ -1,0 +1,44 @@
+{
+  "run_id": "20260504T143819Z-1669fe",
+  "scenario": "nat_false_positive",
+  "scenario_file": "scenarios/nat_false_positive.yaml",
+  "started_at": "2026-05-04T14:38:13.518430+00:00",
+  "ended_at": "2026-05-04T14:38:19.579644+00:00",
+  "target_base_url": "http://localhost:8080",
+  "expected": [],
+  "actual_incidents": [
+    {
+      "id": "5753b629-3926-4da8-882d-481bcf4ddf05",
+      "rule_name": "brute_force",
+      "rule_version": "1.0",
+      "severity": "high",
+      "first_event_at": "2026-05-04T14:38:13.685867Z",
+      "last_event_at": "2026-05-04T14:38:14.106662Z",
+      "detected_at": "2026-05-04T14:38:14.172906Z",
+      "source_ip": "172.18.0.1",
+      "target_user_name": "carol",
+      "event_count": 6,
+      "details": {
+        "threshold": 5,
+        "failure_count": 6,
+        "window_seconds": 60,
+        "distinct_usernames": [
+          "alice",
+          "bob",
+          "carol"
+        ]
+      },
+      "contributing_events": [
+        "f4f5b631-d6ed-4cd2-94ab-1940b8a23ab9",
+        "14d6993c-60d2-4e37-af2c-f5b2ba3c9d08",
+        "4753963e-238d-4769-b861-17ccaa2d2a08",
+        "ef90d8f8-c404-476f-ae1d-b10b121a8e85",
+        "35e45b75-1d2f-4820-a76a-1a5ca51dccb0",
+        "a234814f-6cf8-49a7-9d03-dbfdf9ad6fc4"
+      ],
+      "status": "open",
+      "notes": null
+    }
+  ],
+  "description": "NAT environment false positive: 3 different users (alice, bob, carol)\neach typo their password 2 times from a shared source IP. Total: 6\nfailed authentications across 3 distinct accounts.\n\nbrute_force rule groups by source_ip only (industrial standard), so\nthe SIEM WILL fire even though no single account is being attacked.\nThis is the documented NAT/proxy limitation discussed in ADR-022 and\nChapter 7 (Future work). Mitigations: per-(IP, user) grouping or UEBA."
+}

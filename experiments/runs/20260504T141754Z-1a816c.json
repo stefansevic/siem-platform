@@ -1,0 +1,50 @@
+{
+  "run_id": "20260504T141754Z-1a816c",
+  "scenario": "brute_force_with_noise",
+  "scenario_file": "scenarios/brute_force_with_noise.yaml",
+  "started_at": "2026-05-04T14:17:21.015996+00:00",
+  "ended_at": "2026-05-04T14:17:54.428507+00:00",
+  "target_base_url": "http://localhost:8080",
+  "expected": [
+    {
+      "rule": "brute_force",
+      "severity": "high",
+      "min_count": 1
+    }
+  ],
+  "actual_incidents": [
+    {
+      "id": "7edc2b3b-a591-4ac1-b125-b771914a6a33",
+      "rule_name": "brute_force",
+      "rule_version": "1.0",
+      "severity": "high",
+      "first_event_at": "2026-05-04T14:17:21.189354Z",
+      "last_event_at": "2026-05-04T14:17:31.364659Z",
+      "detected_at": "2026-05-04T14:17:26.903173Z",
+      "source_ip": "172.18.0.1",
+      "target_user_name": "admin",
+      "event_count": 8,
+      "details": {
+        "threshold": 5,
+        "failure_count": 8,
+        "window_seconds": 60,
+        "distinct_usernames": [
+          "admin"
+        ]
+      },
+      "contributing_events": [
+        "a7fc329f-1f86-484f-9686-35d1c901ead1",
+        "31e4668c-26b9-4d27-ad96-0c1a68cea570",
+        "9b8f17bb-4415-467d-b3a8-152cc9b1fb84",
+        "7b2a4733-bba9-40e6-9761-fbc4a8e2f1dc",
+        "e544ed77-bc7d-4a99-93ca-2f9fb2d47e47",
+        "7a6ebfd3-91fb-4c73-80c1-0a0ac6371ba5",
+        "1f146d91-078c-4ed1-88a1-874e86a28fda",
+        "e70129b2-8155-4d8e-9429-03441447d5ae"
+      ],
+      "status": "open",
+      "notes": null
+    }
+  ],
+  "description": "Brute-force attack against admin while legitimate users are actively\nusing the application. Tests that the SIEM distinguishes the attack\nfrom background traffic — only one brute_force incident should fire,\nand no false positives should appear from the normal flow."
+}

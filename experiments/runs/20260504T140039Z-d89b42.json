@@ -1,0 +1,50 @@
+{
+  "run_id": "20260504T140039Z-d89b42",
+  "scenario": "basic_brute_force",
+  "scenario_file": "scenarios/basic_brute_force.yaml",
+  "started_at": "2026-05-04T14:00:33.493261+00:00",
+  "ended_at": "2026-05-04T14:00:39.212673+00:00",
+  "target_base_url": "http://localhost:8080",
+  "expected": [
+    {
+      "rule": "brute_force",
+      "severity": "high",
+      "min_count": 1
+    }
+  ],
+  "actual_incidents": [
+    {
+      "id": "85afa1f1-411a-4d6d-9d9d-620002dd107a",
+      "rule_name": "brute_force",
+      "rule_version": "1.0",
+      "severity": "high",
+      "first_event_at": "2026-05-04T14:00:33.655322Z",
+      "last_event_at": "2026-05-04T14:00:35.838079Z",
+      "detected_at": "2026-05-04T14:00:34.881358Z",
+      "source_ip": "172.18.0.1",
+      "target_user_name": "admin",
+      "event_count": 8,
+      "details": {
+        "threshold": 5,
+        "failure_count": 8,
+        "window_seconds": 60,
+        "distinct_usernames": [
+          "admin"
+        ]
+      },
+      "contributing_events": [
+        "65c272ec-69a6-4c84-8fcd-4b1a9242c238",
+        "c89093ad-161d-4263-835b-a6bd17606c45",
+        "ca8fe044-6694-482e-a69a-7c6951af3057",
+        "5fa33441-7312-4af6-8326-345772b7a50c",
+        "465f4303-6a52-4472-9b4e-6e36b0166707",
+        "baec55d6-78f6-4139-b0d0-75edbd9c39fc",
+        "6ff523f9-58bf-4efe-ba33-ece53478bba1",
+        "f85c1a70-856d-4ce7-9450-7307cbaf3a00"
+      ],
+      "status": "open",
+      "notes": null
+    }
+  ],
+  "description": "Simple brute-force attack against a single account, no background noise.\nSanity check that the brute_force rule fires and incidents persist\nthrough the full pipeline."
+}

@@ -1,0 +1,13 @@
+scenario,n_runs,precision_mean,precision_std,recall_mean,recall_std,f1_mean,f1_std
+basic_ato,10,1.0,0.0,1.0,0.0,1.0,0.0
+basic_brute_force,10,1.0,0.0,1.0,0.0,1.0,0.0
+basic_dir_scan,10,1.0,0.0,1.0,0.0,1.0,0.0
+brute_force_with_noise,5,1.0,0.0,1.0,0.0,1.0,0.0
+dir_scan_with_noise,5,1.0,0.0,1.0,0.0,1.0,0.0
+distributed_brute_force,3,1.0,0.0,1.0,0.0,1.0,0.0
+low_and_slow,3,1.0,0.0,1.0,0.0,1.0,0.0
+mixed_legitimate_and_attack,5,1.0,0.0,1.0,0.0,1.0,0.0
+nat_false_positive,5,0.0,0.0,1.0,0.0,0.0,0.0
+near_threshold_brute_force,5,1.0,0.0,1.0,0.0,1.0,0.0
+only_normal_traffic,10,1.0,0.0,1.0,0.0,1.0,0.0
+slow_burst_brute_force,5,0.4,0.5477,1.0,0.0,0.4,0.5477

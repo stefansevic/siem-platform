@@ -1,0 +1,50 @@
+{
+  "run_id": "20260504T144235Z-b3def1",
+  "scenario": "mixed_legitimate_and_attack",
+  "scenario_file": "scenarios/mixed_legitimate_and_attack.yaml",
+  "started_at": "2026-05-04T14:41:59.796518+00:00",
+  "ended_at": "2026-05-04T14:42:35.138567+00:00",
+  "target_base_url": "http://localhost:8080",
+  "expected": [
+    {
+      "rule": "brute_force",
+      "severity": "high",
+      "min_count": 1
+    }
+  ],
+  "actual_incidents": [
+    {
+      "id": "2222b394-c049-46ec-b167-61b6f821862f",
+      "rule_name": "brute_force",
+      "rule_version": "1.0",
+      "severity": "high",
+      "first_event_at": "2026-05-04T14:41:59.986458Z",
+      "last_event_at": "2026-05-04T14:42:02.045589Z",
+      "detected_at": "2026-05-04T14:42:01.182190Z",
+      "source_ip": "172.18.0.1",
+      "target_user_name": "admin",
+      "event_count": 8,
+      "details": {
+        "threshold": 5,
+        "failure_count": 8,
+        "window_seconds": 60,
+        "distinct_usernames": [
+          "admin"
+        ]
+      },
+      "contributing_events": [
+        "7953ac09-d014-4326-abdb-894bee609aa5",
+        "443fefaa-ed8b-417d-a437-3caad3284f78",
+        "a58b6d2f-b5d0-4b3f-834f-24807d83a543",
+        "a757f293-11b5-49ec-9034-ee102a38ad7e",
+        "586fb2ee-52c8-4dec-9fea-3a37a5ef6274",
+        "e35087b0-46a0-481d-ac8a-c08844e36c83",
+        "74c61f6d-b3d0-469c-9f9c-0dfe9331d656",
+        "d2e0a6be-8e84-451b-929e-771f1cb5c925"
+      ],
+      "status": "open",
+      "notes": null
+    }
+  ],
+  "description": "Realistic mixed scenario: a brute_force attack runs in parallel with\nlegitimate user traffic (3 users on distinct spoofed IPs).\n\nThe SIEM should detect the brute_force attack on admin (TP) and NOT\ngenerate any other incidents from the noise. Validates that legitimate\ntraffic does not trigger directory_scanning or account_takeover false\npositives."
+}

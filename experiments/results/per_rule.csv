@@ -1,0 +1,4 @@
+rule_name,tp,fp,fn,precision,recall,f1
+account_takeover,10,0,0,1.0,1.0,1.0
+brute_force,30,8,0,0.7895,1.0,0.8824
+directory_scanning,15,0,0,1.0,1.0,1.0
