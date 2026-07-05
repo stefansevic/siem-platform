@@ -1,13 +1,12 @@
 """
-Asynchronous tailer for Nginx access logs.
+Tailer za Nginx access log.
 
-Watches the configured access.log file for new lines and publishes each
-line to the Redis `raw_logs` stream as a RawLogMessage.
+Prati access.log fajl i svaku novu liniju objavljuje u Redis stream
+`raw_logs` kao RawLogMessage. Ovo je PULL grana ingestora.
 
-Behavior:
-- If the file does not exist yet at startup, the tailer waits and retries.
-- If the file is rotated (truncated/replaced), the tailer reopens it.
-- Failures publishing to Redis are logged but do not crash the tailer.
+Ponašanje:
+- Ako fajl još ne postoji na startu, tailer čeka i pokušava ponovo.
+- Greška pri slanju u Redis se loguje, ali ne ruši tailer.
 """
 
 import asyncio
@@ -24,23 +23,22 @@ logger = logging.getLogger(__name__)
 
 
 class NginxTailer:
-    """
-    Tail-follow style reader for a single text file.
 
-    Designed to be started as a background asyncio task in `main.py`.
-    """
+    # Citac tekstualnog fajla koji se stalno dopunjuje 
 
     def __init__(self, publisher: RedisPublisher) -> None:
         self._publisher = publisher
         self._path = Path(settings.nginx_access_log_path)
         self._stop_event = asyncio.Event()
 
+
     def stop(self) -> None:
-        """Signal the tailer loop to exit."""
+        """Javi petlji tailera da izađe."""
         self._stop_event.set()
 
+
     async def run(self) -> None:
-        """Main tailer loop. Runs until `stop()` is called."""
+        # Glavna petlja tailera. Radi dok se ne pozove `stop()`
         logger.info(
             "nginx_tailer_started",
             extra={"event_data": {"path": str(self._path)}},
@@ -61,17 +59,16 @@ class NginxTailer:
 
         logger.info("nginx_tailer_stopped")
 
+
     async def _tail_once(self) -> None:
         """
-        Open the file, seek to end, and stream new lines until either
-        the file is replaced (truncated/rotated) or stop is requested.
+        Otvori fajl, skoči na kraj i čitaj nove linije dok se ne zatraži zaustavljanje.
         """
-        # Open in non-blocking text mode. We use plain open() in a thread
-        # executor pattern below for simplicity; line-by-line tailing
-        # of small log volumes does not benefit much from aiofiles.
+
         with open(self._path, "r", encoding="utf-8", errors="replace") as f:
-            # Seek to end so we only see *new* lines.
+            # Skoči na kraj, da vidimo samo NOVE linije (ne ceo istorijski log)
             f.seek(0, os.SEEK_END)
+            # Zapamti inode fajla da kasnije prepoznamo rotaciju
             current_inode = os.fstat(f.fileno()).st_ino
 
             while not self._stop_event.is_set():
@@ -80,22 +77,24 @@ class NginxTailer:
                     await self._publish_line(line.rstrip("\n"))
                     continue
 
-                # No new data; check whether file was rotated/replaced.
+                # Nema novih linija; proveri da nije fajl rotiran/zamenjen.
                 await asyncio.sleep(0.5)
                 try:
                     new_stat = self._path.stat()
+                    # Isti naziv, drugi inode = fajl je zamenjen (rotacija)
                     if new_stat.st_ino != current_inode:
                         logger.info(
                             "nginx_log_rotated_reopening",
                             extra={"event_data": {"path": str(self._path)}},
                         )
-                        return  # outer loop will reopen
+                        return  
                 except FileNotFoundError:
                     logger.warning("nginx_log_disappeared_reopening")
                     return
 
+
     async def _publish_line(self, line: str) -> None:
-        """Publish a single log line to Redis."""
+        """Objavi jednu log liniju u Redis."""
         if not line.strip():
             return
 

@@ -1,15 +1,13 @@
 name: low_and_slow
 description: |
-  Low-and-slow attack: 4 failed login attempts spread over 60 seconds.
-  Each individual rate-limited probe stays below the brute_force
-  threshold (5 failures within 60s). The SIEM must NOT detect this
-  as an attack — that is the expected limitation of threshold-based
-  rules.
+  Low-and-slow napad: 4 neuspeha razvučena kroz 60 sekundi. Usporeni
+  pokušaji ostaju ispod brute_force praga (5 neuspeha u 60s). SIEM NE
+  sme da ovo detektuje kao napad - to je očekivana mana pravila
+  zasnovanih na pragu.
 
-  This scenario is documented as a known False Negative in Chapter 7
-  (Future work) of the thesis. Possible mitigations include
-  ML-based detection, dynamic baselining (Datadog-style), or
-  longer aggregation windows with lower thresholds.
+  Dokumentovano kao poznat False Negative (budući rad). Moguća rešenja:
+  ML detekcija, dinamički baseline (u stilu Datadog-a), ili duži prozori
+  agregacije sa nižim pragom.
 
 expected_incidents: []
 

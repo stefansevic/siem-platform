@@ -1,12 +1,11 @@
 """
-Account-takeover simulator.
+Simulator preuzimanja naloga (account takeover).
 
-Performs N failed logins followed by exactly one successful one,
-matching the rule semantics for `account_takeover`. Useful as a
-standalone scenario where brute_force AND account_takeover should
-both fire.
+Izvede N neuspelih login-a praćenih tačno jednim uspešnim, u skladu sa
+semantikom `account_takeover` pravila. Zgodan kao samostalan scenario
+gde treba da okinu I brute_force I account_takeover.
 
-Usage:
+Upotreba:
     python account_takeover.py --username alice --password 'Wonderland2024!'
     python account_takeover.py --username admin --password admin123 --failed 6
 """
@@ -69,12 +68,12 @@ def main() -> int:
             notes=f"username={args.username} failed={args.failed}",
         )
         recorder.expect(rule="account_takeover", severity="critical")
-        # If failed count exceeds the brute_force threshold (5), expect
-        # that rule to fire too.
+        # Ako broj neuspeha pređe brute_force prag (5), očekuj da okine
+        # i to pravilo.
         if args.failed >= 5:
             recorder.expect(rule="brute_force", severity="high")
 
-    # Phase 1: failed logins
+    # Faza 1: neuspeli login-i
     for i in range(1, args.failed + 1):
         password = f"wrong_{i}"
         try:
@@ -96,7 +95,7 @@ def main() -> int:
             )
         sleep_with_jitter(args.delay)
 
-    # Phase 2: the breakthrough
+    # Faza 2: proboj
     log.info("Attempting successful login...")
     try:
         response = client.post(

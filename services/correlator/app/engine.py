@@ -1,29 +1,26 @@
 """
-Correlation engine: composes rules and per-subject windows.
+Korelacioni engine: spaja pravila i prozore po subjektu.
 
-The engine is the single entry point for incoming events. It owns the
-in-memory state for all rules and dispatches each event to the windows
-that care about it.
+Engine je jedina ulazna tačka za dolazeće događaje. Drži in-memory
+stanje za sva pravila i svaki događaj prosleđuje prozorima koje on zanima.
 
-State layout:
+Raspored stanja:
     self._windows: Dict[(rule_name, subject_key), SlidingWindow]
 
-    Each rule gets its own keyspace via the rule_name prefix; subjects
-    (typically source IPs) are isolated per-rule, so the same IP can
-    have a brute-force window AND a directory-scanning window without
-    crosstalk.
+    Svako pravilo ima svoj prostor ključeva preko rule_name prefiksa;
+    subjekti (obično source IP) su izolovani po pravilu, pa ista IP može
+    imati i brute-force prozor I directory-scanning prozor bez mešanja.
 
-Threading model:
-    Single-threaded by design. The Redis consumer is async and processes
-    events sequentially, so there is no concurrent access to the state
-    dict. If the project ever needs parallel evaluation, this is the
-    place to add a lock or shard by subject hash.
+Model niti:
+    Jednonitni po dizajnu. Redis consumer je async i obrađuje događaje
+    redom, pa nema istovremenog pristupa dict-u stanja. Ako ikad zatreba
+    paralelna evaluacija, ovde bi se dodao lock ili šardovanje po hešu
+    subjekta.
 
-Periodic cleanup:
-    Windows for inactive subjects keep occupying memory until pruned.
-    The engine exposes prune_stale() which the consumer calls every
-    N seconds to evict subjects whose latest entry has aged out
-    completely (the window itself is empty).
+Periodično čišćenje:
+    Prozori neaktivnih subjekata zauzimaju memoriju dok se ne očiste.
+    Engine izlaže prune_stale(), koji consumer poziva svakih N sekundi
+    da izbaci subjekte čiji je prozor potpuno istekao (prazan).
 """
 
 from __future__ import annotations
@@ -47,9 +44,9 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class EngineStats:
-    """Lightweight counters for log-line observability."""
+    """Laki brojači za osmatranje kroz log linije."""
     events_processed: int = 0
-    events_skipped: int = 0          # No rule cared about them
+    events_skipped: int = 0          # nijedno pravilo ih nije zanimalo
     incidents_emitted: int = 0
     windows_pruned: int = 0
     per_rule_incidents: dict = field(default_factory=dict)
@@ -67,17 +64,17 @@ class EngineStats:
 
 class CorrelationEngine:
     """
-    Orchestrates rule evaluation across all incoming ECSEvents.
+    Vodi evaluaciju pravila nad svim dolazećim ECSEvent-ima.
 
     Args:
-        rules: list of CorrelationRule instances. Order does not matter
-               functionally; it only affects the order of incidents
-               returned for a single event (rare in practice).
+        rules: lista CorrelationRule instanci. Redosled funkcionalno nije
+               bitan; utiče samo na redosled incidenata vraćenih za jedan
+               događaj (retko u praksi).
     """
 
     def __init__(self, rules: Iterable[CorrelationRule]):
         self._rules: List[CorrelationRule] = list(rules)
-        # Key: (rule_name, subject_key) -> SlidingWindow
+        # Ključ: (rule_name, subject_key) -> SlidingWindow
         self._windows: dict[Tuple[str, str], SlidingWindow] = {}
         self.stats = EngineStats()
 
@@ -92,9 +89,9 @@ class CorrelationEngine:
 
     def process(self, event: ECSEvent) -> List[Incident]:
         """
-        Dispatch the event to every relevant rule. Returns the list of
-        incidents emitted by this single event (usually 0; occasionally 1;
-        very rarely more if multiple rules fire on the same event).
+        Prosledi događaj svakom relevantnom pravilu. Vraća listu incidenata
+        koje je ovaj jedan događaj proizveo (obično 0; ponekad 1; vrlo retko
+        više, ako više pravila okine na isti događaj).
         """
         self.stats.events_processed += 1
         incidents: List[Incident] = []
@@ -112,7 +109,7 @@ class CorrelationEngine:
             try:
                 incident = rule.evaluate(window, event)
             except Exception:
-                # A buggy rule should never bring down the engine.
+                # Bagovito pravilo nikad ne sme da obori engine.
                 logger.exception(
                     "rule %s raised on event id=%s; skipping",
                     rule.name, event.id,
@@ -130,9 +127,8 @@ class CorrelationEngine:
 
     def prune_stale(self, now: datetime) -> int:
         """
-        Evict empty windows. A window is considered stale once all its
-        entries have aged out relative to `now`. Returns the number of
-        windows removed.
+        Izbaci prazne prozore. Prozor je "ustajao" kad su mu svi unosi
+        istekli u odnosu na `now`. Vraća broj uklonjenih prozora.
         """
         to_remove = []
         for key, window in self._windows.items():
@@ -146,7 +142,7 @@ class CorrelationEngine:
         self.stats.windows_pruned += len(to_remove)
         return len(to_remove)
 
-    # ----- introspection (used in tests and debug logging) -----
+    # ----- introspekcija (za testove i debug logovanje) -----
 
     def window_count(self) -> int:
         return len(self._windows)

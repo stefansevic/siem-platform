@@ -1,9 +1,9 @@
 name: dir_scan_with_noise
 description: |
-  Directory-scanning attack carried out in parallel with normal traffic.
-  Verifies that legitimate page views and the occasional 404 typo from
-  real users do not contribute to the directory_scanning trigger, and
-  that exactly one such incident is created for the attacker.
+  Napad skeniranja direktorijuma paralelno sa normalnim saobraćajem.
+  Proverava da legitimni pregledi i poneki 404 od pravih korisnika ne
+  doprinose okidanju directory_scanning-a, i da se za napadača napravi
+  tačno jedan takav incident.
 
 expected_incidents:
   - rule: directory_scanning

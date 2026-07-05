@@ -1,13 +1,13 @@
 # ============================================
-# Normalizer Service
+# Normalizer servis
 # ============================================
-# Reads raw_logs from Redis, parses+maps to ECS, persists to Postgres,
-# republishes to normalized_events for the Correlation Engine.
+# Čita raw_logs iz Redis-a, parsira i mapira u ECS, upiše u Postgres,
+# i objavi u normalized_events za Correlator.
 
 FROM python:3.11-slim
 
-# Avoid .pyc clutter and ensure stdout/stderr are unbuffered
-# (so Docker logs reflect real-time service activity).
+# Bez .pyc smeća i sa nebaferovanim stdout/stderr
+# (da Docker logovi prikazuju aktivnost u realnom vremenu).
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
@@ -15,22 +15,22 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Install dependencies first (separate layer for better caching)
+# Prvo zavisnosti (odvojen sloj radi boljeg keširanja)
 COPY services/normalizer/requirements.txt ./requirements.txt
 RUN pip install -r requirements.txt
 
-# Copy shared models (Pydantic ECS schemas, Redis key constants)
+# Zajednički modeli (Pydantic ECS šeme, konstante Redis ključeva)
 COPY shared/ ./shared/
 
-# Copy the service code
+# Kod servisa
 COPY services/normalizer/app/ ./app/
 
-# Run as non-root for defense-in-depth
+# Pokreni kao non-root, radi dodatne bezbednosti
 RUN useradd --system --uid 1001 --shell /usr/sbin/nologin normalizer
 USER normalizer
 
-# PYTHONPATH=/app so that 'from shared...' and 'from app...' resolve
+# PYTHONPATH=/app da bi 'from shared...' i 'from app...' radili
 ENV PYTHONPATH=/app
 
-# Entry point: the run_service() coroutine in main.py
+# Ulazna tačka: run_service() korutina iz main.py
 CMD ["python", "-m", "app.main"]

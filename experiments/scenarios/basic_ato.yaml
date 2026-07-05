@@ -1,8 +1,7 @@
 name: basic_ato
 description: |
-  Account-takeover scenario: 5 failed logins followed by a successful
-  one for the same account. Both brute_force and account_takeover
-  rules are expected to fire.
+  Account-takeover scenario: 5 neuspeha praćenih uspehom za isti nalog.
+  Očekuje se da okinu i brute_force i account_takeover pravila.
 
 expected_incidents:
   - rule: brute_force

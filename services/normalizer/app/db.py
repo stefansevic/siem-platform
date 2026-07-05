@@ -1,19 +1,15 @@
 """
-Async PostgreSQL writer for normalized events.
+Async PostgreSQL upisivač normalizovanih događaja.
 
-Uses SQLAlchemy 2.x Core (not the ORM) with the asyncpg driver. The
-Core API maps closely to the SQL we want to emit and avoids ORM
-overhead for what is essentially a write-only path.
+Koristi SQLAlchemy Core (ne ORM) sa asyncpg drajverom.
 
 Idempotency:
-    Every insert is paired with ON CONFLICT (idempotency_key) DO NOTHING.
-    Duplicate ingestions become silent no-ops, preserving exactly-once
-    semantics at the storage layer.
+    Svaki insert ide uz ON CONFLICT (idempotency_key) DO NOTHING.
+    Duplirani upisi postaju tihi, pa je exactly-once očuvan.
 
-Connection lifecycle:
-    The Normalizer creates one EventWriter at startup, calls connect(),
-    and uses it for the lifetime of the process. close() is called once
-    on shutdown.
+Životni ciklus konekcije:
+    Normalizer napravi jedan EventWriter na startu, pozove connect() i
+    koristi ga tokom celog rada. close() se poziva jednom, pri gašenju.
 """
 
 from __future__ import annotations
@@ -37,11 +33,9 @@ logger = logging.getLogger(__name__)
 
 
 # ============================================
-# Table definition
+# Definicija tabele
 # ============================================
-# Mirror of migrations/001_initial_schema.sql + 002_add_idempotency_key.sql.
-# Kept in sync manually -- this is acceptable for a prototype; in a larger
-# project we'd autogenerate from the database via Alembic reflection.
+
 
 _metadata = MetaData()
 
@@ -68,7 +62,7 @@ events_table = Table(
 
 
 # ============================================
-# DSN construction
+# sastavi connection string (DSN)
 # ============================================
 
 def build_dsn(
@@ -79,8 +73,8 @@ def build_dsn(
     database: Optional[str] = None,
 ) -> str:
     """
-    Construct an async PostgreSQL DSN from explicit args or the
-    POSTGRES_* environment variables.
+    Sastavlja async PostgreSQL DSN iz prosleđenih argumenata ili iz
+    POSTGRES_* environment varijabli.
     """
     user = user or os.environ["POSTGRES_USER"]
     password = password or os.environ["POSTGRES_PASSWORD"]
@@ -96,9 +90,9 @@ def build_dsn(
 
 class EventWriter:
     """
-    Single owner of the async engine and connection pool.
+    Jedini vlasnik async engine-a i pool-a konekcija.
 
-    Usage:
+    Upotreba:
         writer = EventWriter(dsn)
         await writer.connect()
         await writer.insert_event(event, idempotency_key="...")
@@ -120,19 +114,19 @@ class EventWriter:
             dsn,
             pool_size=pool_size,
             max_overflow=0,
-            pool_pre_ping=True,  # cheap liveness check before checkout
+            pool_pre_ping=True,  # jeftina provera da je konekcija živa pre korišćenja
             echo=echo,
         )
-        # ES is optional. If unreachable, dual-write degrades to
-        # Postgres-only writes; Postgres is the source of truth so the
-        # SIEM keeps detecting incidents even without ES.
+        # ES je opcion. Ako je nedostupan, dual-write se svede na upis
+        # samo u Postgres; Postgres je source of truth, pa SIEM nastavlja
+        # da detektuje incidente i bez ES-a.
         self._es_url = elasticsearch_url
         self._es_required = elasticsearch_required
         self._es: Optional[AsyncElasticsearch] = None
 
     async def connect(self) -> None:
-        """Verify connectivity by issuing SELECT 1, then optionally
-        connect to Elasticsearch for dual-write."""
+        """Proveri konekciju sa SELECT 1, pa se opciono poveži i na
+        Elasticsearch za dual-write."""
         assert self._engine is not None
         async with self._engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
@@ -155,12 +149,12 @@ class EventWriter:
                 logger.warning("Elasticsearch unreachable: %s", exc)
                 if self._es_required:
                     raise
-                # Drop the client so insert_event skips ES writes
+                # Odbaci klijent, da insert_event preskoči upis u ES
                 await self._es.close()
                 self._es = None
 
     async def close(self) -> None:
-        """Dispose the engine, its pool, and the ES client."""
+        """Ugasi engine, njegov pool i ES klijent."""
         if self._es is not None:
             await self._es.close()
             self._es = None
@@ -176,13 +170,12 @@ class EventWriter:
         idempotency_key: str,
     ) -> bool:
         """
-        Insert one ECSEvent. Returns True if a new row was written,
-        False if a row with the same idempotency_key already exists.
+        Upisuje jedan ECSEvent. Vraća True ako je upisan nov red,
+        False ako red sa istim idempotency_key već postoji.
 
-        On a successful Postgres insert (i.e. the event is not a
-        duplicate), the same event is also indexed in Elasticsearch.
-        ES failures are logged but do not raise — Postgres remains
-        the source of truth.
+        Na uspešan Postgres upis (tj. događaj nije duplikat), isti
+        događaj se indeksira i u Elasticsearch. ES greške se loguju,
+        ali ne dižu izuzetak - Postgres ostaje source of truth.
         """
         if self._engine is None:
             raise RuntimeError("EventWriter is not connected")
@@ -195,8 +188,8 @@ class EventWriter:
             result = await conn.execute(stmt)
             inserted = result.rowcount == 1
 
-        # Dual-write to ES on new events only. Duplicates are skipped
-        # because they will already be in ES from the original write.
+        # Dual-write u ES samo za nove događaje. Duplikate preskačemo
+        # jer su već u ES-u od prvog upisa.
         if inserted and self._es is not None:
             await self._index_event_in_es(event)
 
@@ -204,8 +197,8 @@ class EventWriter:
 
     async def _index_event_in_es(self, event: ECSEvent) -> None:
         """
-        Send the event to the daily ES index. Failures are swallowed
-        with a warning — ES is best-effort, Postgres is the truth.
+        Šalje događaj u dnevni ES indeks. Greške se gutaju uz warning -
+        ES je best-effort, Postgres je source of truth.
         """
         index = daily_index_name(event.timestamp)
         document = {
@@ -227,7 +220,7 @@ class EventWriter:
             "host_name": getattr(event, "host_name", None),
             "ingested_at": getattr(event, "ingested_at", event.timestamp).isoformat(),
         }
-        # Drop None values so ES does not store explicit nulls
+        # Izbaci None vrednosti, da ES ne čuva eksplicitne null-ove
         document = {k: v for k, v in document.items() if v is not None}
 
         try:
@@ -250,10 +243,8 @@ class EventWriter:
     @staticmethod
     def _event_to_row(event: ECSEvent, idempotency_key: str) -> dict:
         """
-        Convert an ECSEvent to a plain dict ready for SQLAlchemy.
+        Pretvara ECSEvent u običan dict spreman za SQLAlchemy.
 
-        Pydantic exposes IPvAnyAddress as a non-string type that asyncpg
-        cannot bind directly, so we coerce it.
         """
         source_ip = str(event.source_ip) if event.source_ip is not None else None
 

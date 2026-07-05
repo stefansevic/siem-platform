@@ -1,13 +1,12 @@
 """
-Brute-force attack simulator.
+Simulator brute-force napada.
 
-Sends repeated POST /login requests with wrong passwords, optionally
-followed by the correct one. The SIEM should fire a `brute_force` rule
-once the per-IP failure threshold is crossed; if the correct password
-is revealed at the end and the failure count is high enough, an
-`account_takeover` should also fire.
+Šalje ponavljane POST /login zahteve sa pogrešnim lozinkama, opciono
+praćene tačnom. SIEM treba da okine `brute_force` pravilo kad se pređe
+per-IP prag neuspeha; ako se na kraju otkrije tačna lozinka a broj
+neuspeha je dovoljno visok, treba da okine i `account_takeover`.
 
-Usage:
+Upotreba:
     python brute_force.py --username alice --attempts 10
     python brute_force.py --username admin --attempts 20 --delay 0.2
     python brute_force.py --username alice --attempts 6 \\
@@ -98,7 +97,7 @@ def main() -> int:
         if args.reveal_password and args.attempts >= 5:
             recorder.expect(rule="account_takeover", severity="critical")
 
-    # ----- Phase 1: wrong passwords -----
+    # ----- Faza 1: pogrešne lozinke -----
     failures = 0
     for i in range(1, args.attempts + 1):
         password = f"{args.password_prefix}_{i}"
@@ -131,7 +130,7 @@ def main() -> int:
 
         sleep_with_jitter(args.delay)
 
-    # ----- Phase 2: optional correct password reveal -----
+    # ----- Faza 2: opciono otkrivanje tačne lozinke -----
     if args.reveal_password:
         log.info("Revealing correct password...")
         try:
@@ -152,7 +151,7 @@ def main() -> int:
         except Exception as exc:
             log.error("Reveal request failed: %s", exc)
 
-    # ----- Wrap up -----
+    # ----- Zaokruživanje -----
     log.info(
         "Done: %d/%d failed-login responses observed",
         failures, args.attempts,

@@ -1,7 +1,7 @@
 name: basic_dir_scan
 description: |
-  Simple directory-scanning attack with the built-in wordlist, no
-  background noise. Sanity check for the directory_scanning rule.
+  Prost napad skeniranja direktorijuma sa ugrađenom wordlistom, bez
+  pozadinskog šuma. Provera directory_scanning pravila.
 
 expected_incidents:
   - rule: directory_scanning

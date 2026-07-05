@@ -1,11 +1,8 @@
 """
-Async Redis publisher for raw log messages.
+Async Redis publisher za sirove log poruke.
 
-Wraps the redis-py async client and exposes a single high-level method:
-    await publisher.publish_raw_log(message)
-
-Failures are logged but never raised - losing one log entry must not
-crash the ingestor or block other producers.
+Greške se loguju, ali se nikad ne dižu: gubitak jednog loga ne sme
+da sruši ingestor niti da blokira ostale.
 """
 
 import json
@@ -23,20 +20,20 @@ logger = logging.getLogger(__name__)
 
 
 class RedisPublisher:
-    """Async Redis Streams publisher."""
+    """Objavljuje poruke u Redis Streams."""
 
     def __init__(self) -> None:
         self._client: Optional[redis_async.Redis] = None
 
     async def connect(self) -> None:
-        """Open the Redis connection. Called once at app startup."""
+        """Otvori Redis konekciju. Poziva se jednom, na startu aplikacije."""
         self._client = redis_async.Redis(
             host=settings.redis_host,
             port=settings.redis_port,
             password=settings.redis_password or None,
             decode_responses=True,
         )
-        # Ping to verify connectivity early
+        # Ping odmah, da rano otkrijemo da li veza radi
         try:
             await self._client.ping()
             logger.info(
@@ -48,7 +45,7 @@ class RedisPublisher:
             raise
 
     async def disconnect(self) -> None:
-        """Close the Redis connection at app shutdown."""
+        """Zatvori Redis konekciju pri gašenju aplikacije."""
         if self._client is not None:
             await self._client.close()
             self._client = None
@@ -56,18 +53,17 @@ class RedisPublisher:
 
     async def publish_raw_log(self, message: RawLogMessage) -> Optional[str]:
         """
-        Publish a RawLogMessage to the `raw_logs` stream.
+        Objavi RawLogMessage u `raw_logs` stream.
 
-        Returns the Redis-assigned stream entry ID on success, or None on
-        failure. Errors are logged but never raised.
+        Vraća ID stream unosa koji Redis dodeli, ili None ako padne.
+        Greške se loguju, nikad ne dižu.
         """
         if self._client is None:
             logger.error("publish_called_before_connect")
             return None
 
-        # Redis Streams expect a flat dict of strings.
-        # We serialize the entire message as JSON so the consumer
-        # (Normalizer) can rebuild it with one call.
+        # Redis Streams očekuje ravan dict stringova. Celu poruku
+        # serijalizujemo kao JSON, da je Normalizer sklopi nazad jednim pozivom.
         payload = {"data": message.model_dump_json()}
 
         try:

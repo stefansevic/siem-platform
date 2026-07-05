@@ -1,23 +1,13 @@
 """
-Redis Streams consumer that drives the normalization pipeline.
+Redis Streams consumer koji pokreće normalizacioni pipeline.
 
-Reads from `raw_logs` using a consumer group, parses+maps each entry
-into an ECSEvent, persists it to Postgres (idempotent), republishes
-to `normalized_events` for downstream correlation, and acks the entry.
+Čita iz `raw_logs` preko consumer grupe, svaki unos parsira i mapira u
+ECSEvent, upiše ga u Postgres (idempotentno), objavi u
+`normalized_events` za korelaciju nizvodno, pa potvrdi unos (XACK).
 
-Failure handling:
-    * ParseError or MappingError -> entry routed to `dead_letter_logs`
-      stream and acked. The pipeline never blocks on a poison pill.
-    * SkipEvent (e.g. lifecycle noise) -> acked silently.
-    * Unexpected exceptions -> entry left unacked. After visibility
-      timeout, another consumer will pick it up via XAUTOCLAIM.
-      The Normalizer never crashes the loop on a single bad entry.
+Rukovanje greškama:
+    * ParseError ili MappingError -> unos ide u `dead_letter_logs`
 
-Consumer groups give us:
-    * Multiple Normalizer replicas can share the load (XREADGROUP
-      partitions entries across consumers within the same group).
-    * Pending Entries List (PEL) tracks unacked entries, enabling
-      crash recovery via XAUTOCLAIM on startup.
 """
 
 from __future__ import annotations
@@ -53,18 +43,18 @@ logger = logging.getLogger(__name__)
 
 
 # ============================================
-# Configuration
+# Konfiguracija
 # ============================================
 
-# How long XREADGROUP blocks waiting for new entries (milliseconds).
-# Short enough that shutdown is responsive, long enough to avoid busy-loop.
+# Koliko XREADGROUP blokira čekajući nove unose (ms). Dovoljno kratko da
+# gašenje bude brzo, dovoljno dugo da ne vrtimo praznu petlju.
 _BLOCK_MS = 5000
 
-# Max entries returned per XREADGROUP call.
+# Najviše unosa po jednom XREADGROUP pozivu.
 _BATCH_COUNT = 32
 
-# Visibility timeout for crashed consumers (milliseconds). Entries pending
-# longer than this are eligible for reclamation by other consumers.
+# Timeout vidljivosti za pale consumer-e (ms). Unos koji je pending duže
+# od ovoga sme da preuzme drugi consumer.
 _PEL_RECLAIM_MS = 60_000
 
 
@@ -74,12 +64,12 @@ _PEL_RECLAIM_MS = 60_000
 
 class NormalizerConsumer:
     """
-    Owns the read loop, the Redis client, and the EventWriter.
+    Vlasnik read petlje, Redis klijenta i EventWriter-a.
 
-    Lifecycle:
+    Životni ciklus:
         consumer = NormalizerConsumer(redis_url, writer)
         await consumer.connect()
-        await consumer.run()       # blocks until stop() is called
+        await consumer.run()      
         await consumer.close()
     """
 
@@ -92,7 +82,6 @@ class NormalizerConsumer:
     ):
         self._redis_url = redis_url
         self._writer = writer
-        # Use hostname so multi-replica deployments self-identify in Redis.
         self._consumer_name = consumer_name or f"normalizer-{socket.gethostname()}"
         self._redis: Optional[aioredis.Redis] = None
         self._stop_event = asyncio.Event()
@@ -100,7 +89,7 @@ class NormalizerConsumer:
     # ----- lifecycle -----
 
     async def connect(self) -> None:
-        """Open the Redis connection and ensure the consumer group exists."""
+        """Otvori Redis konekciju i obezbedi da consumer grupa postoji."""
         self._redis = aioredis.from_url(
             self._redis_url, decode_responses=True
         )
@@ -118,13 +107,13 @@ class NormalizerConsumer:
             logger.info("NormalizerConsumer closed")
 
     def stop(self) -> None:
-        """Request the run loop to exit at the next iteration."""
+        """Zatraži da run petlja izađe u sledećoj iteraciji."""
         self._stop_event.set()
 
-    # ----- main loop -----
+    # ----- glavna petlja -----
 
     async def run(self) -> None:
-        """Read-process-ack loop. Returns when stop() is called."""
+        """Petlja: pročitaj - obradi - potvrdi. Izlazi kad se pozove stop()."""
         if self._redis is None:
             raise RuntimeError("connect() must be called before run()")
 
@@ -132,7 +121,7 @@ class NormalizerConsumer:
             try:
                 entries = await self._read_batch()
             except Exception:
-                # Network blip, Redis down, etc. Back off briefly and retry.
+                # Mrežni prekid, Redis pao, itd. Kratko sačekaj pa probaj opet.
                 logger.exception("XREADGROUP failed; retrying")
                 await asyncio.sleep(1.0)
                 continue
@@ -148,42 +137,41 @@ class NormalizerConsumer:
 
     async def _ensure_group(self) -> None:
         """
-        Create the consumer group if it does not exist. MKSTREAM means we
-        also create the stream itself, so the Normalizer can start before
-        the Ingestor has produced anything.
+        Napravi consumer grupu ako ne postoji. Ako postoji, samo se poveži.
+        
         """
         assert self._redis is not None
         try:
             await self._redis.xgroup_create(
                 name=STREAM_RAW_LOGS,
                 groupname=GROUP_NORMALIZER,
-                id="0",      # start from beginning of stream
+                id="0",      # kreni od početka stream-a
                 mkstream=True,
             )
             logger.info("Created consumer group %s on %s",
                         GROUP_NORMALIZER, STREAM_RAW_LOGS)
         except aioredis.ResponseError as exc:
             if "BUSYGROUP" in str(exc):
-                # Group already exists -- normal restart path
+                # Grupa već postoji - normalan put pri restartu
                 return
             raise
 
     async def _read_batch(self) -> list:
-        """One round of XREADGROUP. Returns the raw redis-py response."""
+        """Jedan krug XREADGROUP-a. Vraća sirov redis-py odgovor."""
         assert self._redis is not None
         return await self._redis.xreadgroup(
             groupname=GROUP_NORMALIZER,
             consumername=self._consumer_name,
-            streams={STREAM_RAW_LOGS: ">"},  # ">" means undelivered to this consumer
+            streams={STREAM_RAW_LOGS: ">"},  # ">" znači neisporučeno ovom consumer-u
             count=_BATCH_COUNT,
             block=_BLOCK_MS,
         )
 
     async def _process_entry(self, entry_id: str, fields: dict) -> None:
         """
-        Handle one stream entry. The contract is: by the time this method
-        returns, the entry is either acked (success or dead-lettered) or
-        intentionally left pending (true unexpected error).
+        Obradi jedan unos iz stream-a. Ugovor: kad ova metoda vrati,
+        unos je ili potvrđen (uspeh ili dead-letter) ili namerno ostavljen
+        pending (stvarno neočekivana greška).
         """
         raw_payload = fields.get("data")
         if raw_payload is None:
@@ -192,7 +180,7 @@ class NormalizerConsumer:
             await self._ack(entry_id)
             return
 
-        # Stage 1: deserialize the envelope produced by the Ingestor.
+        # Korak 1: deserijalizuj omotač koji je napravio Ingestor.
         try:
             envelope = json.loads(raw_payload)
             raw_msg = RawLogMessage(**envelope)
@@ -202,11 +190,11 @@ class NormalizerConsumer:
             await self._ack(entry_id)
             return
 
-        # Stage 2: parse + map to ECSEvent.
+        # Korak 2: parsiraj i mapiraj u ECSEvent.
         try:
             event = normalize(raw_msg)
         except SkipEvent:
-            # Lifecycle/noise — acked silently, never persisted.
+            # Lifecycle/šum - tiho potvrdi, nikad ne čuvaj.
             await self._ack(entry_id)
             return
         except (ParseError, MappingError) as exc:
@@ -215,16 +203,16 @@ class NormalizerConsumer:
             await self._ack(entry_id)
             return
 
-        # Stage 3: persist + republish.
+        # Korak 3: sačuvaj i objavi dalje.
         try:
             key = compute_idempotency_key(raw_msg)
             inserted = await self._writer.insert_event(event, idempotency_key=key)
             if inserted:
                 await self._publish_normalized(event)
-            # Either way, the message has been handled successfully.
+            # U oba slučaja, poruka je uspešno obrađena.
             await self._ack(entry_id)
         except Exception:
-            # Real I/O failure: do NOT ack so another consumer can retry.
+            # Prava I/O greška: NE potvrđuj, da drugi consumer proba ponovo.
             logger.exception("Entry %s persistence/publish failed; leaving unacked",
                              entry_id)
             return
@@ -238,7 +226,7 @@ class NormalizerConsumer:
     async def _dead_letter(
         self, entry_id: str, payload: Optional[str], reason: str,
     ) -> None:
-        """Quarantine a malformed entry for later forensic inspection."""
+        """Skloni pokvaren unos u karantin, za kasniju forenzičku analizu."""
         assert self._redis is not None
         await self._redis.xadd(
             STREAM_DEAD_LETTER,
@@ -247,17 +235,17 @@ class NormalizerConsumer:
                 "reason": reason,
                 "payload": payload or "",
             },
-            maxlen=10_000,        # cap memory: keep the latest 10k bad entries
+            maxlen=10_000,        # ograniči memoriju: čuvaj poslednjih 10k loših unosa
             approximate=True,
         )
 
     async def _publish_normalized(self, event: ECSEvent) -> None:
         """
-        Push the ECSEvent onto the normalized_events stream so that the
-        Correlation Engine downstream can consume it.
+        Gurni ECSEvent u normalized_events stream, da ga Correlator
+        nizvodno pokupi.
         """
         assert self._redis is not None
-        # mode='json' emits a JSON-friendly dict (datetimes -> ISO strings, etc.).
+        # mode='json' daje dict pogodan za JSON (datetime -> ISO string, itd.).
         body = event.model_dump(mode="json")
         await self._redis.xadd(
             STREAM_NORMALIZED_EVENTS,

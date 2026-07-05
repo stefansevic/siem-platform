@@ -1,12 +1,11 @@
 name: mixed_legitimate_and_attack
 description: |
-  Realistic mixed scenario: a brute_force attack runs in parallel with
-  legitimate user traffic (3 users on distinct spoofed IPs).
-  
-  The SIEM should detect the brute_force attack on admin (TP) and NOT
-  generate any other incidents from the noise. Validates that legitimate
-  traffic does not trigger directory_scanning or account_takeover false
-  positives.
+  Realističan mešani scenario: brute_force napad ide paralelno sa
+  legitimnim saobraćajem (3 korisnika na različitim lažiranim IP).
+
+  SIEM treba da detektuje brute_force na admin (TP) i da NE napravi
+  nijedan drugi incident iz šuma. Potvrđuje da legitiman saobraćaj ne
+  okida lažni directory_scanning ni account_takeover.
 
 expected_incidents:
   - rule: brute_force

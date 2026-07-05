@@ -1,8 +1,8 @@
 name: near_threshold_brute_force
 description: |
-  Boundary case: 4 failed login attempts (one below brute_force threshold of 5).
-  The SIEM must NOT detect this as an attack. Tests that the threshold logic
-  is exact and does not fire on subthreshold activity.
+  Granični slučaj: 4 neuspela login-a (jedan ispod brute_force praga 5).
+  SIEM NE sme da detektuje ovo kao napad. Proverava da je logika praga
+  tačna i da ne okida ispod praga.
 
 expected_incidents: []
 

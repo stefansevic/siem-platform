@@ -2,14 +2,14 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install dependencies first (better Docker layer caching)
+# Prvo zavisnosti (bolje keširanje Docker slojeva pri rebuild-u)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
+# Zatim kod aplikacije
 COPY app/ ./app/
 
 EXPOSE 9000
 
-# Run with uvicorn (production-ish settings for demo)
+# Pokreni preko uvicorn-a (demo podešavanja)
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "9000", "--access-log"]

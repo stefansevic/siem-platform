@@ -1,13 +1,11 @@
 name: nat_false_positive
 description: |
-  NAT environment false positive: 3 different users (alice, bob, carol)
-  each typo their password 2 times from a shared source IP. Total: 6
-  failed authentications across 3 distinct accounts.
-  
-  brute_force rule groups by source_ip only (industrial standard), so
-  the SIEM WILL fire even though no single account is being attacked.
-  This is the documented NAT/proxy limitation discussed in ADR-022 and
-  Chapter 7 (Future work). Mitigations: per-(IP, user) grouping or UEBA.
+  NAT false positive: 3 korisnika (alice, bob, carol) svaki 2 puta
+  pogreši šifru sa ISTE deljene IP. Ukupno 6 neuspeha kroz 3 naloga.
+
+  brute_force grupiše samo po source_ip (industrijski standard), pa SIEM
+  OKINE iako nijedan pojedinačan nalog nije napadnut. To je dokumentovana
+  NAT mana (ADR-022, budući rad). Rešenje: grupisanje po (IP, user) ili UEBA.
 
 expected_incidents: []
 

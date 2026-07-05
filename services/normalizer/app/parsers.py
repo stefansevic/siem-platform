@@ -1,16 +1,13 @@
 """
-Pure parser functions for raw log payloads.
+Čiste parser funkcije za sirove logove.
 
-Two formats are supported:
-    - Nginx siem_combined  (text, regex)
-    - Demo webapp JSON     (json.loads + dict access)
+Podržana dva formata:
+    - Nginx siem_combined  
+    - Demo webapp JSON     
 
-Each parser returns a `ParsedFields` dataclass — a flat, source-neutral
-intermediate representation. The mapper module converts ParsedFields into
-the canonical ECSEvent.
+Svaki parser vraća `ParsedFields` - neutralnu među-strukturu.
+Mapper je kasnije pretvara u kanonski ECSEvent.
 
-These functions are intentionally I/O-free so they can be unit tested
-without Redis, Postgres, or any container running.
 """
 
 from __future__ import annotations
@@ -22,15 +19,11 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 
-# ============================================
-# Intermediate representation
-# ============================================
 
 @dataclass
 class ParsedFields:
     """
-    Source-neutral parsed fields. Not all fields are present for all
-    log types; the mapper decides what becomes an ECSEvent.
+    Parsirana polja neutralna na izvor. Nemaju svi logovi sva polja.
     """
     timestamp: Optional[datetime] = None
     source_ip: Optional[str] = None
@@ -39,27 +32,14 @@ class ParsedFields:
     http_status: Optional[int] = None
     user_agent: Optional[str] = None
     user_name: Optional[str] = None
-    event_type: Optional[str] = None    # "authentication" | "http_request" | "authorization" | ...
-    outcome: Optional[str] = None       # "success" | "failure"
+    event_type: Optional[str] = None    
+    outcome: Optional[str] = None       
     extras: dict[str, Any] = field(default_factory=dict)
 
 
 class ParseError(ValueError):
-    """Raised when a payload cannot be parsed by the chosen parser."""
+    """Diže se kad izabrani parser ne može da obradi payload."""
 
-
-# ============================================
-# Nginx siem_combined parser
-# ============================================
-# Format definition (from log-sources/nginx/nginx.conf):
-#   $remote_addr - $remote_user [$time_local] "$request" $status $body_bytes_sent
-#   "$http_referer" "$http_user_agent"
-#   rt=$request_time uct="$upstream_connect_time"
-#   uht="$upstream_header_time" urt="$upstream_response_time"
-#
-# Real example:
-#   172.18.0.1 - - [27/Apr/2026:10:05:27 +0000] "POST /login HTTP/1.1" 401 41
-#   "-" "curl/7.81.0" rt=0.002 uct="0.001" uht="0.001" urt="0.001"
 
 _NGINX_SIEM_COMBINED_RE = re.compile(
     r'^(?P<remote_addr>\S+)\s+'
@@ -78,15 +58,14 @@ _NGINX_SIEM_COMBINED_RE = re.compile(
     r'\s*$'
 )
 
-# Nginx $time_local format: 27/Apr/2026:10:05:27 +0000
 _NGINX_TIME_FORMAT = "%d/%b/%Y:%H:%M:%S %z"
 
 
 def parse_nginx_siem_combined(payload: str) -> ParsedFields:
     """
-    Parse one line of Nginx access log in `siem_combined` format.
+    Parsira jednu liniju Nginx access log-a u `siem_combined` formatu.
 
-    Raises ParseError if the line does not match the expected shape.
+    Diže ParseError ako linija ne odgovara očekivanom obliku.
     """
     line = payload.strip()
     if not line:
@@ -103,7 +82,6 @@ def parse_nginx_siem_combined(payload: str) -> ParsedFields:
     except ValueError as exc:
         raise ParseError(f"invalid time_local: {g['time_local']!r}") from exc
 
-    # Normalize to UTC (Nginx already emits offset, just convert)
     ts_utc = ts.astimezone(timezone.utc)
 
     user_agent = g["user_agent"] if g["user_agent"] != "-" else None
@@ -115,9 +93,9 @@ def parse_nginx_siem_combined(payload: str) -> ParsedFields:
         url_path=g["path"],
         http_status=int(g["status"]),
         user_agent=user_agent,
-        user_name=None,  # Nginx access log has no auth context
+        user_name=None,  # Nginx access log nema podatke o autentifikaciji
         event_type="http_request",
-        outcome=None,    # outcome is decided by the mapper from status code
+        outcome=None,    # ishod mapper određuje iz status koda
         extras={
             "rt": _safe_float(g["rt"]),
             "uct": _safe_float(g["uct"]),
@@ -128,7 +106,7 @@ def parse_nginx_siem_combined(payload: str) -> ParsedFields:
 
 
 def _safe_float(value: str) -> Optional[float]:
-    """Return float or None if value is '-' or empty."""
+    """Vrati float, ili None ako je vrednost '-' ili prazna."""
     if value in ("-", "", None):
         return None
     try:
@@ -138,18 +116,9 @@ def _safe_float(value: str) -> Optional[float]:
 
 
 # ============================================
-# Demo webapp JSON parser
+# Parser za Demo webapp JSON
 # ============================================
-# Two event types matter for correlation:
-#   1. event_type=http_request    — every request (middleware)
-#   2. event_type=authentication  — login success/failure
-# Plus event_type=authorization (unauthorized_access) and lifecycle (ignored).
-#
-# Real example (auth failure):
-#   {"timestamp":"2026-04-27T10:05:27.123456+00:00","level":"WARNING",
-#    "logger":"demo-webapp","message":"authentication_failure",
-#    "event_type":"authentication","outcome":"failure","username":"admin",
-#    "source_ip":"172.18.0.1","reason":"invalid_credentials"}
+
 
 _KNOWN_EVENT_TYPES = {
     "http_request",
@@ -161,9 +130,9 @@ _KNOWN_EVENT_TYPES = {
 
 def parse_demo_webapp_json(payload: str) -> ParsedFields:
     """
-    Parse one JSON log line emitted by the demo webapp.
+    Parsira jednu JSON log liniju koju emituje demo webapp.
 
-    Raises ParseError on invalid JSON or missing required fields.
+    Diže ParseError na nevalidan JSON.
     """
     try:
         obj = json.loads(payload)
@@ -173,7 +142,7 @@ def parse_demo_webapp_json(payload: str) -> ParsedFields:
     if not isinstance(obj, dict):
         raise ParseError(f"expected JSON object, got {type(obj).__name__}")
 
-    # timestamp is required for any meaningful event
+    # timestamp je obavezan za svaki smislen događaj
     ts_raw = obj.get("timestamp")
     if not ts_raw:
         raise ParseError("missing 'timestamp' field")
@@ -188,8 +157,6 @@ def parse_demo_webapp_json(payload: str) -> ParsedFields:
     ts_utc = ts.astimezone(timezone.utc)
 
     event_type = obj.get("event_type")
-    # Don't reject unknown types — mapper may still want to persist them
-    # as 'web' category. We just record what we saw.
 
     status_code = obj.get("status_code")
     if status_code is not None:

@@ -1,24 +1,22 @@
 """
-Redis Streams consumer for the Correlation Engine.
+Redis Streams consumer za korelacioni engine.
 
-Reads from `normalized_events` (the Normalizer's output) using consumer
-group `correlator-group`. For each event it asks the engine to process
-the event, then publishes any resulting incidents to `incidents` for
-the Alert Manager to pick up.
+Čita iz `normalized_events` (izlaz Normalizera) preko consumer grupe
+`correlator-group`. Za svaki događaj traži od engine-a da ga obradi, pa
+sve nastale incidente objavi u `incidents` da ih Alert Manager pokupi.
 
-Periodic state cleanup:
-    The engine accumulates one SlidingWindow per (rule, subject_key)
-    pair. Long-idle subjects keep a window allocated until pruned.
-    Every PRUNE_INTERVAL_SECONDS we ask the engine to drop empty
-    windows, using the most recent event's timestamp as "now". Stream
-    time, not wall-clock, so behavior is stable in replays and tests.
+Periodično čišćenje stanja:
+    Engine nakuplja po jedan SlidingWindow za svaki (rule, subject_key)
+    par. Dugo neaktivni subjekti drže prozor dok se ne očiste. Svakih
+    PRUNE_INTERVAL_SECONDS tražimo od engine-a da izbaci prazne prozore,
+    koristeći timestamp najnovijeg događaja kao "sada". Vreme iz stream-a,
+    ne zidni sat, pa je ponašanje stabilno u replay-u i testovima.
 
-Failure handling:
-    Malformed JSON or invalid envelopes are logged and acked (they
-    cannot reach this stream from a healthy Normalizer; if they do,
-    something upstream is broken and we don't want to block the loop).
-    DB-style retries are not needed — there is no external I/O on the
-    happy path other than two Redis XADD/XACK calls.
+Rukovanje greškama:
+    Pokvaren JSON ili nevalidni omotači se loguju i potvrde (ne mogu da
+    stignu do ovog stream-a iz zdravog Normalizera; ako stignu, nešto je
+    uzvodno slomljeno, a ne želimo da blokiramo petlju). DB-stil ponavljanja
+    nije potreban - na srećnom putu nema I/O osim dva Redis XADD/XACK poziva.
 """
 
 from __future__ import annotations
@@ -51,9 +49,9 @@ PRUNE_INTERVAL_SECONDS = 60
 
 class CorrelatorConsumer:
     """
-    Owns the Redis client, the engine, and the read loop.
+    Vlasnik Redis klijenta, engine-a i read petlje.
 
-    Lifecycle mirrors NormalizerConsumer:
+    Životni ciklus je isti kao kod NormalizerConsumer-a:
         await consumer.connect()
         await consumer.run()
         await consumer.close()
@@ -159,7 +157,7 @@ class CorrelatorConsumer:
             await self._ack(entry_id)
             return
 
-        # Update prune timestamp regardless of dispatch outcome.
+        # Ažuriraj prune timestamp bez obzira na ishod obrade.
         self._last_prune_ts = event.timestamp
 
         try:
@@ -196,12 +194,11 @@ class CorrelatorConsumer:
         )
 
     def _maybe_prune(self) -> None:
-        """Prune empty windows once per interval, using stream time."""
+        """Očisti prazne prozore jednom po intervalu, po vremenu iz stream-a."""
         if self._last_prune_ts is None:
             return
-        # Tracks "wall time" via the latest event we saw.
-        # In an idle stream, prune does not advance, which is fine —
-        # nothing to clean up if no new events are arriving.
-        # Real implementation: keep a counter of events since last prune.
-        # Simpler heuristic: prune every batch (cheap enough).
+        # "Vreme" pratimo preko najnovijeg viđenog događaja. Kad je stream
+        # miran, prune ne napreduje - i to je u redu, nema šta da se čisti
+        # ako ne stižu novi događaji. Pravo rešenje: brojač događaja od
+        # poslednjeg prune-a. Prostija heuristika: čisti svaku grupu (jeftino).
         self._engine.prune_stale(self._last_prune_ts)

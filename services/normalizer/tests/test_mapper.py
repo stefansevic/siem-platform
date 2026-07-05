@@ -1,10 +1,10 @@
 """
-Unit tests for the mapper.
+Unit testovi za mapper.
 
-Tests cover the full normalize() pipeline (parse + map) using realistic
-RawLogMessage payloads. The mapper is the place where security semantics
-get assigned, so each correlation rule has at least one test that proves
-its required fields are present in the resulting ECSEvent.
+Pokrivaju ceo normalize() tok (parsiranje + mapiranje) sa realnim
+RawLogMessage payload-ima. Mapper je mesto gde se dodeljuje bezbednosno
+značenje, pa svako korelaciono pravilo ima bar jedan test koji dokazuje
+da su njegova potrebna polja prisutna u nastalom ECSEvent-u.
 """
 
 from __future__ import annotations
@@ -32,11 +32,11 @@ from app.parsers import ParseError
 # ============================================
 
 def make_raw(payload: str, source: LogSource, fmt: LogFormat) -> RawLogMessage:
-    """Convenience constructor for a RawLogMessage in tests."""
+    """Pomoćni konstruktor za RawLogMessage u testovima."""
     return RawLogMessage(source=source, format=fmt, payload=payload)
 
 
-# Realistic payloads (same shapes as test_parsers.py)
+# Realni payload-i (isti oblici kao u test_parsers.py)
 NGINX_LOGIN_FAIL = (
     '172.18.0.1 - - [27/Apr/2026:10:05:27 +0000] "POST /login HTTP/1.1" 401 41 '
     '"-" "curl/7.81.0" rt=0.003 uct="0.001" uht="0.001" urt="0.001"'
@@ -99,9 +99,9 @@ class TestNginxMapping:
 
     def test_post_login_401_is_web_failure(self):
         """
-        Nginx sees /login POST 401 as a generic web failure.
-        The webapp's structured 'authentication' event provides the
-        security-meaningful version separately.
+        Nginx vidi /login POST 401 kao običan web neuspeh. Bezbednosno
+        značajnu verziju daje webapp-ov strukturirani 'authentication'
+        događaj, zasebno.
         """
         raw = make_raw(NGINX_LOGIN_FAIL, LogSource.NGINX, LogFormat.NGINX_COMBINED)
         event = normalize(raw)
@@ -112,7 +112,7 @@ class TestNginxMapping:
         assert event.url_path == "/login"
 
     def test_404_is_failure(self):
-        """Foundation for directory scanning rule: 404s become 'web' + 'failure'."""
+        """Osnova za directory scanning pravilo: 404 postaje 'web' + 'failure'."""
         raw = make_raw(NGINX_404, LogSource.NGINX, LogFormat.NGINX_COMBINED)
         event = normalize(raw)
 
@@ -133,7 +133,7 @@ class TestNginxMapping:
 
 class TestWebappMapping:
     def test_auth_failure_has_required_fields(self):
-        """Foundation for brute-force rule: authentication + failure + source_ip."""
+        """Osnova za brute-force pravilo: authentication + failure + source_ip."""
         raw = make_raw(WEBAPP_AUTH_FAILURE, LogSource.DEMO_WEBAPP, LogFormat.JSON)
         event = normalize(raw)
 
@@ -143,7 +143,7 @@ class TestWebappMapping:
         assert event.user_name == "admin"
 
     def test_auth_success_has_required_fields(self):
-        """Foundation for account takeover rule: authentication + success after failures."""
+        """Osnova za account takeover pravilo: authentication + success posle neuspeha."""
         raw = make_raw(WEBAPP_AUTH_SUCCESS, LogSource.DEMO_WEBAPP, LogFormat.JSON)
         event = normalize(raw)
 
@@ -160,7 +160,7 @@ class TestWebappMapping:
         assert event.url_path == "/admin"
 
     def test_event_action_preserves_original_verb(self):
-        """event.action keeps the source's event_type for forensic detail."""
+        """event.action čuva izvorni event_type, za forenzički detalj."""
         raw = make_raw(WEBAPP_AUTH_FAILURE, LogSource.DEMO_WEBAPP, LogFormat.JSON)
         event = normalize(raw)
         assert event.event_action == "authentication"
@@ -199,8 +199,8 @@ class TestOutcomeDerivation:
 
     def test_explicit_outcome_overrides_status_heuristic(self):
         """
-        Webapp auth failure has status_code absent but outcome=failure.
-        Mapper must use the explicit outcome.
+        Webapp auth failure nema status_code, ali ima outcome=failure.
+        Mapper mora da koristi eksplicitan ishod.
         """
         raw = make_raw(WEBAPP_AUTH_FAILURE, LogSource.DEMO_WEBAPP, LogFormat.JSON)
         event = normalize(raw)
@@ -213,7 +213,7 @@ class TestOutcomeDerivation:
 
 class TestErrors:
     def test_unknown_format_raises_parse_error(self):
-        # syslog is in the enum but no parser exists for it
+        # syslog postoji u enum-u, ali parser za njega ne postoji
         raw = make_raw("anything", LogSource.UNKNOWN, LogFormat.SYSLOG)
         with pytest.raises(ParseError):
             normalize(raw)

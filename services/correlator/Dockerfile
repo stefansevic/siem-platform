@@ -1,8 +1,8 @@
 # ============================================
-# Correlator Service
+# Correlator servis
 # ============================================
-# Reads normalized_events from Redis, applies correlation rules,
-# publishes detected incidents to the incidents stream.
+# Čita normalized_events iz Redis-a, primenjuje korelaciona pravila,
+# i objavljuje otkrivene incidente u incidents stream.
 
 FROM python:3.11-slim
 

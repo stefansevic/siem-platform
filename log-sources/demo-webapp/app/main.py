@@ -1,16 +1,13 @@
 """
-Demo Web Application - Log Source #2
+Demo veb aplikacija - izvor logova #2.
 
-A minimal FastAPI app that simulates a real web service.
-Generates structured JSON logs to stdout for every request,
-with special focus on authentication events.
+Minimalna FastAPI aplikacija koja glumi pravi veb servis. Za svaki
+zahtev emituje strukturiran JSON log, sa naglaskom na događaje
+autentifikacije (login uspeh/neuspeh) koje SIEM analizira.
 
-This is intentionally vulnerable for SIEM testing purposes:
-- Plaintext passwords (no hashing)
-- Predictable test accounts
-- Weak rate limiting (none)
+Namerno je ranjiva, jer služi kao meta za testiranje SIEM-a:
+lozinke u plain textu, predvidivi nalozi, bez rate limita.
 
-DO NOT use this code in production.
 """
 
 import asyncio
@@ -30,11 +27,11 @@ from pydantic import BaseModel
 
 
 # ============================================
-# Structured JSON logging
+#  JSON logovanje
 # ============================================
 
 class JSONFormatter(logging.Formatter):
-    """Formats every log record as a single-line JSON object."""
+    """Svaki log zapis pretvara u jednu liniju JSON-a."""
 
     def format(self, record: logging.LogRecord) -> str:
         log_obj = {
@@ -43,18 +40,18 @@ class JSONFormatter(logging.Formatter):
             "logger": record.name,
             "message": record.getMessage(),
         }
-        # Attach any extra fields passed via logger.info(..., extra={...})
+        # Dodaj polja prosleđena preko logger.info(..., extra={...})
         if hasattr(record, "event_data") and isinstance(record.event_data, dict):
             log_obj.update(record.event_data)
 
-        # Forward to Ingestor (fire-and-forget, no await)
+        # Prosledi Ingestoru - pošalji i zaboravi (bez await)
         if record.name == "demo-webapp":
             _ship_event(log_obj)
 
         return json.dumps(log_obj, ensure_ascii=False)
 
 
-# Configure root logger to emit JSON to stdout
+# Root logger emituje JSON na stdout
 _handler = logging.StreamHandler(sys.stdout)
 _handler.setFormatter(JSONFormatter())
 logging.basicConfig(level=logging.INFO, handlers=[_handler], force=True)
@@ -62,7 +59,7 @@ logging.basicConfig(level=logging.INFO, handlers=[_handler], force=True)
 logger = logging.getLogger("demo-webapp")
 
 # ============================================
-# Forwarder: send each event to the SIEM Ingestor
+# Prosleđivanje: svaki događaj šaljemo SIEM Ingestoru
 # ============================================
 
 INGESTOR_URL = os.getenv("INGESTOR_URL", "http://ingestor:8001/logs")
@@ -73,14 +70,14 @@ _http_client: Optional[httpx.AsyncClient] = None
 
 async def _forward_to_ingestor(event: dict) -> None:
     """
-    Fire-and-forget shipment of a structured event to the Ingestor.
+    Šalje događaj Ingestoru po principu "pošalji i zaboravi".
 
-    Failures are logged but never raised: the demo webapp must remain
-    responsive even if the SIEM is down.
+    Greške se samo zabeleže, nikad ne dižu izuzetak: aplikacija mora
+    da radi normalno čak i ako je SIEM pao.
     """
     global _http_client
     if _http_client is None:
-        return  # not yet initialized
+        return  # klijent još nije inicijalizovan
 
     try:
         await _http_client.post(
@@ -90,7 +87,7 @@ async def _forward_to_ingestor(event: dict) -> None:
             timeout=INGESTOR_TIMEOUT,
         )
     except Exception as exc:
-        # Don't use logger here -- avoid recursive forwarding
+        # Ne koristi logger ovde - izbegli bismo rekurzivno prosleđivanje
         print(
             json.dumps({
                 "level": "WARN",
@@ -104,33 +101,33 @@ async def _forward_to_ingestor(event: dict) -> None:
 
 
 def _ship_event(event: dict) -> None:
-    """Schedule a forward without awaiting it."""
+    """Zakaži slanje u pozadini, bez čekanja odgovora."""
     try:
         loop = asyncio.get_running_loop()
         loop.create_task(_forward_to_ingestor(event))
     except RuntimeError:
-        # No running loop yet (e.g., during early init) -- skip
+        # Petlja još ne postoji (rano pokretanje) - preskoči
         pass
 
 
 # ============================================
-# Fake user database
+# Lažna baza korisnika
 # ============================================
-# Plaintext on purpose - this is a test target.
+# Lozinke u plain textu namerno - ovo je meta za testiranje.
 
 USERS = {
     "alice": "Wonderland2024!",
     "bob":   "BuilderBob#42",
-    "admin": "admin123",          # weak on purpose - brute force should find it
+    "admin": "admin123",          # slaba namerno - brute force treba da je pronađe
     "carol": "CarolPass!2024",
 }
 
-# Very simple in-memory session store
+# Vrlo prost session store u memoriji
 SESSIONS: dict[str, str] = {}  # session_id -> username
 
 
 # ============================================
-# FastAPI app
+# FastAPI aplikacija
 # ============================================
 
 app = FastAPI(
@@ -141,22 +138,22 @@ app = FastAPI(
 
 
 def get_client_ip(request: Request) -> str:
-    """Extract real client IP, accounting for the Nginx reverse proxy."""
+    """Vrati pravu IP klijenta, uzimajući u obzir Nginx reverse proxy."""
     forwarded = request.headers.get("x-real-ip") or request.headers.get("x-forwarded-for")
     if forwarded:
-        # X-Forwarded-For can be a list, take the first
+        # X-Forwarded-For može biti lista - uzmi prvu adresu
         return forwarded.split(",")[0].strip()
     return request.client.host if request.client else "unknown"
 
 
-# ----- Middleware: log every request -----
+# ----- Middleware: loguje svaki zahtev -----
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     start = time.perf_counter()
 
-    # Health-check noise: skip logging for the Docker health probe.
-    # /health is hit every 5 seconds and is not interesting for SIEM.
+    # /health lupa svakih 5s (Docker health probe) i nije zanimljiv
+    # SIEM-u, pa ga preskačemo da ne pravi šum.
     if request.url.path == "/health":
         return await call_next(request)
 
@@ -179,7 +176,7 @@ async def log_requests(request: Request, call_next):
 
 
 # ============================================
-# Endpoints
+# Endpointi
 # ============================================
 
 @app.get("/")
@@ -205,8 +202,8 @@ async def login(
     password: str = Form(...),
 ):
     """
-    Authenticates a user. Always emits an 'authentication' event log
-    that the SIEM Normalizer will pick up.
+    Autentifikuje korisnika. Uvek emituje 'authentication' događaj
+    koji SIEM Normalizer kasnije pokupi.
     """
     source_ip = get_client_ip(request)
     expected = USERS.get(username)
@@ -227,7 +224,7 @@ async def login(
             detail="Invalid username or password",
         )
 
-    # Successful login
+    # Uspešan login
     session_id = str(uuid.uuid4())
     SESSIONS[session_id] = username
 
@@ -264,7 +261,7 @@ async def logout(request: Request, session_id: str = Form(...)):
 
 @app.get("/profile")
 async def profile(request: Request, session_id: Optional[str] = None):
-    """Protected endpoint - requires valid session."""
+    """Zaštićen endpoint - traži validnu sesiju."""
     source_ip = get_client_ip(request)
 
     if not session_id or session_id not in SESSIONS:
@@ -285,7 +282,7 @@ async def profile(request: Request, session_id: Optional[str] = None):
 
 @app.get("/admin")
 async def admin_panel(request: Request, session_id: Optional[str] = None):
-    """Admin-only endpoint."""
+    """Endpoint samo za administratora."""
     source_ip = get_client_ip(request)
     username = SESSIONS.get(session_id) if session_id else None
 
@@ -305,8 +302,8 @@ async def admin_panel(request: Request, session_id: Optional[str] = None):
 
     return {"panel": "admin", "users_count": len(USERS)}
 
-    # ============================================
-# Lifecycle: initialize HTTP client at startup
+# ============================================
+# Životni ciklus: inicijalizacija HTTP klijenta na startu
 # ============================================
 
 @app.on_event("startup")

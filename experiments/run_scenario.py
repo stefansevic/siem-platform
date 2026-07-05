@@ -1,24 +1,24 @@
 """
-Scenario orchestrator.
+Orkestrator scenarija.
 
-Reads a YAML scenario definition, executes its steps (sequentially
-or in parallel), and produces a single ground-truth JSON file that
-captures the whole run. Subprocess output is streamed to the console
-so the operator can see attack progress in real time.
+Čita YAML definiciju scenarija, izvršava njegove korake (redom ili
+paralelno) i pravi jedan ground-truth JSON fajl koji obuhvata ceo run.
+Izlaz podprocesa se prikazuje uživo, pa operater vidi napredak napada
+u realnom vremenu.
 
-Usage:
+Upotreba:
     python run_scenario.py scenarios/basic_brute_force.yaml
     python run_scenario.py scenarios/distributed_brute_force.yaml --reset-db
 
-The orchestrator:
-    1. Optionally resets Postgres events + incidents tables.
-    2. Records the run start time (anchor for metric computation).
-    3. Walks every step in the YAML.
-       - "attack" -> run a Python script in attacks/.
-       - "wait"   -> sleep N seconds (lets the SIEM finish processing).
-       - "parallel" -> run multiple children concurrently.
-    4. Records the run end time.
-    5. Writes a single combined ground-truth JSON to runs/.
+Orkestrator:
+    1. Opciono resetuje Postgres events + incidents tabele.
+    2. Zabeleži vreme početka run-a (sidro za računanje metrika).
+    3. Prođe kroz svaki korak iz YAML-a.
+       - "attack"   -> pokreni Python skriptu iz attacks/.
+       - "wait"     -> spavaj N sekundi (da SIEM stigne da obradi).
+       - "parallel" -> pokreni više dece istovremeno.
+    4. Zabeleži vreme kraja run-a.
+    5. Upiše jedan objedinjen ground-truth JSON u runs/.
 """
 
 from __future__ import annotations
@@ -73,14 +73,14 @@ def parse_args() -> argparse.Namespace:
 
 def reset_database() -> None:
     """
-    Full pipeline reset for clean experimental runs:
+    Pun reset pipeline-a za čiste eksperimentalne run-ove:
         1. TRUNCATE Postgres events + incidents
-        2. DELETE all events-* indices in Elasticsearch
-        3. FLUSHDB Redis (clears streams + consumer groups)
-        4. Restart normalizer + correlator to recreate consumer groups
-           and clear in-memory sliding window state.
+        2. DELETE svih events-* indeksa u Elasticsearch-u
+        3. FLUSHDB Redis (briše stream-ove + consumer grupe)
+        4. Restart normalizer + correlator da se ponovo naprave consumer
+           grupe i očisti in-memory stanje kliznih prozora.
 
-    Fails fast — any subprocess error aborts the run.
+    Fail-fast - bilo koja greška podprocesa prekida run.
     """
     print("[orchestrator] Full reset: postgres + elasticsearch + redis + services...")
     repo_root = EXPERIMENTS_DIR.parent
@@ -106,7 +106,7 @@ def reset_database() -> None:
         "postgres truncate",
     )
 
-    # 2. Elasticsearch — list then delete one-by-one (wildcards blocked)
+    # 2. Elasticsearch - izlistaj pa briši jedan po jedan (wildcard je blokiran)
     list_result = subprocess.run(
         ["curl", "-s", "http://localhost:9200/_cat/indices/events-*?h=index"],
         capture_output=True, text=True,
@@ -125,13 +125,13 @@ def reset_database() -> None:
         "redis flushdb",
     )
 
-    # 4. Restart services that hold state or consumer-group registrations
+    # 4. Restartuj servise koji drže stanje ili registracije consumer grupa
     _run(
         ["docker", "compose", "restart", "normalizer", "correlator"],
         "service restart",
     )
 
-    # Give services time to reconnect and recreate consumer groups
+    # Daj servisima vremena da se povežu i ponovo naprave consumer grupe
     time.sleep(3)
     print("[orchestrator] Reset complete.")
 
@@ -140,16 +140,15 @@ def reset_database() -> None:
 # ============================================
 
 def run_attack_step(step: dict) -> int:
-    """Run an attack script as a subprocess; stream output live."""
+    """Pokreni attack skriptu kao podproces; prikazuj izlaz uživo."""
     script = step["script"]
     script_path = ATTACKS_DIR / script
     if not script_path.exists():
         raise FileNotFoundError(f"Attack script not found: {script_path}")
 
     args = [str(a) for a in step.get("args", [])]
-    # Always tell child scripts to skip their individual ground-truth
-    # records — the orchestrator builds a single combined record
-    # for the whole scenario.
+    # Uvek reci deci-skriptama da preskoče svoj pojedinačni ground-truth
+    # zapis - orkestrator pravi jedan objedinjen zapis za ceo scenario.
     args = args + ["--no-record"]
 
     cmd = [sys.executable, str(script_path), *args]
@@ -160,7 +159,7 @@ def run_attack_step(step: dict) -> int:
 
 
 def run_parallel_step(step: dict) -> List[int]:
-    """Run children concurrently, return the list of exit codes."""
+    """Pokreni decu istovremeno, vrati listu exit kodova."""
     children = step.get("children", [])
     if not children:
         return []
@@ -186,7 +185,7 @@ def run_parallel_step(step: dict) -> List[int]:
 
 
 def run_step(step: dict) -> int:
-    """Dispatch a single step. Returns 0 on success."""
+    """Izvrši jedan korak. Vraća 0 na uspeh."""
     step_type = step.get("type")
     if step_type == "attack":
         return run_attack_step(step)
@@ -221,19 +220,18 @@ def write_ground_truth(
     target_base_url: str,
 ) -> Path:
     """
-    Write a consolidated ground-truth record covering the whole run.
-    Individual attack scripts are invoked with --no-record by the
-    orchestrator, so the only record produced is this one.
+    Upiši objedinjen ground-truth zapis za ceo run. Pojedinačne attack
+    skripte orkestrator poziva sa --no-record, pa je ovaj zapis jedini.
 
-    The function also queries the API Gateway for incidents detected
-    inside the run window and embeds them as `actual_incidents`. This
-    locks in the result before the next run's --reset-db wipes the DB.
-    Used by compute_metrics.py (Week 11) to evaluate Precision/Recall/F1.
+    Funkcija usput pita API Gateway za incidente otkrivene unutar prozora
+    run-a i ubaci ih kao `actual_incidents`. Time se rezultat "zaključa"
+    pre nego što sledeći --reset-db obriše bazu. Koristi ga compute_metrics.py
+    za računanje Precision/Recall/F1.
     """
     RUNS_DIR.mkdir(parents=True, exist_ok=True)
     run_id = make_run_id()
 
-    # Give Alert Manager time to flush incidents to Postgres before we query.
+    # Daj Alert Manageru vremena da upiše incidente u Postgres pre upita.
     print("[orchestrator] Waiting 3.0s for incidents to settle...")
     time.sleep(3.0)
 
@@ -256,8 +254,8 @@ def write_ground_truth(
 
 
 def _fetch_incidents_for_window(started_at: str, ended_at: str) -> list[dict]:
-    """Query API Gateway for incidents detected within [started_at, ended_at]
-    with a 5-second tolerance on each side. Returns [] on failure (logged)."""
+    """Pitaj API Gateway za incidente otkrivene unutar [started_at, ended_at]
+    sa tolerancijom od 5s na svaku stranu. Vraća [] na grešku (uz log)."""
     import urllib.request
     import urllib.parse
     import urllib.error

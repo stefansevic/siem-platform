@@ -1,9 +1,9 @@
 """
-Centralized configuration loaded from environment variables.
+Centralizovana konfiguracija iz environment varijabli.
 
-Pydantic Settings validates types at startup so a missing or malformed
-env var fails the service immediately with a clear error message,
-rather than crashing mid-run with a cryptic NameError or KeyError.
+Pydantic Settings proverava tipove na startu, pa nedostajuća ili
+pogrešna env varijabla odmah obori servis sa jasnom porukom, umesto
+da pukne usred rada sa nejasnim NameError ili KeyError.
 """
 
 from __future__ import annotations
@@ -16,8 +16,8 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
-        # Allow other Postgres/Redis env vars in the shared .env to coexist
-        # without raising on unknown keys.
+        # Dozvoli da druge Postgres/Redis varijable iz zajedničkog .env
+        # postoje, bez greške na nepoznate ključeve.
         extra="ignore",
     )
 
@@ -48,14 +48,14 @@ class Settings(BaseSettings):
     def redis_url(self) -> str:
         return f"redis://{self.redis_host}:{self.redis_port}/{self.redis_db}"
 
-    # ----- Elasticsearch (Week 9: dual-write for event search) -----
+    # ----- Elasticsearch (dual-write za pretragu događaja) -----
     elasticsearch_url: str = Field(
         default="http://elasticsearch:9200",
         alias="ELASTICSEARCH_URL",
     )
-    # When True, ES write failures cause the event to be skipped from ES
-    # but still written to Postgres. When False, ES failures are logged
-    # only — Postgres remains the source of truth.
+    # Ako je True, greška u upisu u ES preskoči događaj iz ES-a, ali se
+    # on i dalje upiše u Postgres. Ako je False, ES greške se samo
+    # loguju - Postgres ostaje source of truth.
     elasticsearch_required: bool = Field(
         default=False,
         alias="ELASTICSEARCH_REQUIRED",

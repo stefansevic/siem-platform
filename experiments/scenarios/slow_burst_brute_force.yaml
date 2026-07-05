@@ -1,10 +1,9 @@
 name: slow_burst_brute_force
 description: |
-  Sliding-window edge case: 6 failed login attempts spread over 90 seconds
-  (15s between each). The brute_force window is 60s, so within any sliding
-  60s window there are at most 4-5 failures.
-  Whether this triggers depends on exact timing of when the rule re-evaluates.
-  Documents sensitivity of static-window correlation to attack pacing.
+  Granični slučaj kliznog prozora: 6 neuspeha razmaknutih po 16s, kroz
+  90s. Prozor je 60s, pa u bilo kom prozoru ima najviše 4-5 neuspeha.
+  Da li okine zavisi od tačnog tajminga kad se pravilo ponovo evaluira.
+  Pokazuje osetljivost korelacije sa fiksnim prozorom na tempo napada.
 
 expected_incidents: []
 

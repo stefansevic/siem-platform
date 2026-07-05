@@ -1,15 +1,15 @@
 """
-Directory-scanning attack simulator.
+Simulator napada skeniranja direktorijuma.
 
-Probes a list of common paths likely to return 404. The SIEM should
-fire a `directory_scanning` rule once enough distinct 404 responses
-are seen from the same IP within the rule's window.
+Probava listu čestih putanja koje verovatno vraćaju 404. SIEM treba da
+okine `directory_scanning` pravilo kad vidi dovoljno različitih 404
+odgovora sa iste IP unutar prozora pravila.
 
-The default wordlist is small (~60 paths) and inline so the script
-runs without external files; pass --wordlist <path> to use SecLists or
-similar. The wordlist is filtered for empty lines and comments.
+Podrazumevana wordlista je mala (~60 putanja) i ugrađena, pa skripta
+radi bez eksternih fajlova; prosledi --wordlist <path> za SecLists ili
+sličan. Wordlista se filtrira od praznih linija i komentara.
 
-Usage:
+Upotreba:
     python directory_scan.py
     python directory_scan.py --paths-count 30 --delay 0.05
     python directory_scan.py --wordlist common.txt
@@ -31,8 +31,8 @@ from base import (
 )
 
 
-# A reasonable starting wordlist. Each entry is a path segment that
-# attackers commonly probe for misconfigurations or leaked secrets.
+# Razumna početna wordlista. Svaki unos je putanja koju napadači često
+# probaju tražeći pogrešne konfiguracije ili procurele tajne.
 DEFAULT_WORDLIST = [
     "admin", "administrator", "wp-admin", "phpmyadmin", "phpinfo.php",
     "backup", "backups", "bak", "old", "tmp", "temp", "test",

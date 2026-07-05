@@ -1,8 +1,7 @@
 name: basic_brute_force
 description: |
-  Simple brute-force attack against a single account, no background noise.
-  Sanity check that the brute_force rule fires and incidents persist
-  through the full pipeline.
+  Prost brute-force napad na jedan nalog, bez pozadinskog šuma.
+  Provera da brute_force pravilo okine i da incident prođe ceo pipeline.
 
 expected_incidents:
   - rule: brute_force

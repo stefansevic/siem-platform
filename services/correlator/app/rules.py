@@ -1,29 +1,28 @@
 """
-Correlation rules.
+Korelaciona pravila.
 
-Each rule is a self-contained class with two responsibilities:
+Svako pravilo je samostalna klasa sa dve odgovornosti:
 
     subject(event)   -> str | None
-        Identifies which "actor" the event is about. The engine groups
-        events by subject so each subject gets its own SlidingWindow.
-        Returns None if the event is not relevant to this rule (e.g.
-        a successful login is irrelevant to brute-force detection).
+        Kaže o kom "akteru" je događaj. Engine grupiše događaje po
+        subjektu, pa svaki subjekat dobije svoj SlidingWindow. Vraća
+        None ako događaj nije relevantan za ovo pravilo (npr. uspešan
+        login nije bitan za brute-force detekciju).
 
     evaluate(window, event) -> Incident | None
-        Given the existing window for this subject and the freshly
-        added event, decides whether the rule has fired. Returns a
-        populated Incident on a hit, or None.
+        Na osnovu postojećeg prozora za taj subjekat i tek dodatog
+        događaja, odlučuje da li je pravilo okinulo. Vraća popunjen
+        Incident kad pogodi, ili None.
 
-The engine does not know what each rule looks for. It just walks the
-list of registered rules, dispatches events, and forwards Incidents.
+Engine ne zna šta koje pravilo traži. Samo prolazi kroz listu pravila,
+prosleđuje događaje i dalje šalje incidente.
 
-Design notes:
-    * Rules are instantiated once at startup with their threshold
-      parameters. Re-tuning thresholds is a config change, not a code
-      change.
-    * Rules are I/O-free. They only inspect the SlidingWindow they were
-      handed and produce a return value. Persistence and notification
-      are the engine's and Alert Manager's jobs.
+Napomene o dizajnu:
+    * Pravila se instanciraju jednom, na startu, sa svojim pragovima.
+      Menjanje pragova je promena konfiguracije, ne koda.
+    * Pravila su bez I/O. Samo gledaju SlidingWindow koji su dobila i
+      vrate rezultat. Čuvanje i obaveštavanje su posao engine-a i
+      Alert Managera.
 """
 
 from __future__ import annotations
@@ -49,7 +48,7 @@ from app.windows import SlidingWindow
 # ============================================
 
 class CorrelationRule(ABC):
-    """Abstract base for all correlation rules."""
+    """Apstraktna osnova za sva korelaciona pravila."""
 
     name: str
     version: str = "1.0"
@@ -59,8 +58,8 @@ class CorrelationRule(ABC):
     @abstractmethod
     def subject(self, event: ECSEvent) -> Optional[str]:
         """
-        Return the grouping key for this event, or None if the rule
-        does not care about this event at all.
+        Vrati ključ grupisanja za ovaj događaj, ili None ako pravilo
+        uopšte ne mari za ovaj događaj.
         """
 
     @abstractmethod
@@ -68,9 +67,9 @@ class CorrelationRule(ABC):
         self, window: SlidingWindow, event: ECSEvent,
     ) -> Optional[Incident]:
         """
-        Apply rule logic. The given window contains all relevant prior
-        events for this subject (already filtered by subject()), with
-        the new event already added at the end.
+        Primeni logiku pravila. Dati prozor sadrži sve relevantne ranije
+        događaje za ovaj subjekat (već filtrirane kroz subject()), sa
+        novim događajem već dodatim na kraj.
         """
 
     # ----- shared helper -----
@@ -83,8 +82,8 @@ class CorrelationRule(ABC):
         details: Optional[dict] = None,
     ) -> Incident:
         """
-        Common Incident scaffolding. Subclasses fill in `details` with
-        rule-specific context.
+        Zajednički kostur Incident-a. Podklase popune `details` sa
+        kontekstom specifičnim za pravilo.
         """
         contributing = [e.id for e in window.events() if isinstance(e, ECSEvent)]
         return Incident(
@@ -108,16 +107,16 @@ class CorrelationRule(ABC):
 
 class BruteForceRule(CorrelationRule):
     """
-    Fires when a single source IP produces too many failed
-    authentication attempts within a short window.
+    Okida kad jedna source IP napravi previše neuspelih pokušaja
+    autentifikacije u kratkom prozoru.
 
-    Specification: X failures from the same source IP within T minutes.
-    Defaults from the project brief: X = 5, T = 1 minute.
+    Specifikacija: X neuspeha sa iste source IP unutar T minuta.
+    Podrazumevano iz projektnog zadatka: X = 5, T = 1 minut.
 
-    Rationale: classic password-guessing attack. The rule looks at
-    `event.category = authentication` AND `event.outcome = failure`,
-    grouped by `source.ip`. Successful logins or non-auth events are
-    ignored entirely (subject() returns None).
+    Ideja: klasičan napad pogađanja lozinke. Pravilo gleda
+    `event.category = authentication` I `event.outcome = failure`,
+    grupisano po `source.ip`. Uspešni login-i i ne-auth događaji se
+    potpuno ignorišu (subject() vrati None).
     """
 
     name = "brute_force"
@@ -141,12 +140,12 @@ class BruteForceRule(CorrelationRule):
     def evaluate(
         self, window: SlidingWindow, event: ECSEvent,
     ) -> Optional[Incident]:
-        # Window already contains failure events for this IP only,
-        # because subject() filtered everything else out.
+        # Prozor već sadrži samo neuspehe za ovu IP, jer je subject()
+        # sve ostalo odfiltrirao.
         if window.count() < self.threshold:
             return None
 
-        # Distinct usernames attempted are useful forensic context.
+        # Različiti pokušani username-i su koristan forenzički kontekst.
         usernames = sorted({
             e.user_name for e in window.events()
             if isinstance(e, ECSEvent) and e.user_name
@@ -170,17 +169,17 @@ class BruteForceRule(CorrelationRule):
 
 class DirectoryScanningRule(CorrelationRule):
     """
-    Fires when a single source IP probes many distinct paths and
-    receives 404 responses, optionally followed by 403s.
+    Okida kad jedna source IP proba mnogo različitih putanja i dobija
+    404 odgovore, opciono praćene 403-ima.
 
-    Specification: > 10 distinct 404 paths from the same source IP
-    within 30 seconds.
+    Specifikacija: > 20 različitih 404 putanja sa iste source IP unutar
+    60 sekundi.
 
-    Rationale: tools like DirBuster/Gobuster brute-force common paths
-    looking for hidden endpoints. The hallmark is a wide variety of
-    paths, not just a high request rate. Counting distinct URLs
-    (rather than total 404s) reduces false positives from a misconfigured
-    client retrying the same broken URL.
+    Ideja: alati kao DirBuster/Gobuster napamet probaju česte putanje
+    tražeći skrivene endpointe. Obeležje je širok spektar RAZLIČITIH
+    putanja, ne samo visoka učestalost zahteva. Brojanje različitih URL-ova
+    (umesto ukupnih 404) smanjuje lažne alarme od pogrešno podešenog
+    klijenta koji ponavlja isti pokvaren URL.
     """
 
     name = "directory_scanning"
@@ -189,8 +188,8 @@ class DirectoryScanningRule(CorrelationRule):
     def __init__(
         self,
         *,
-        threshold: int = 10,
-        window: timedelta = timedelta(seconds=30),
+        threshold: int = 20,
+        window: timedelta = timedelta(seconds=60),
     ):
         if threshold < 2:
             raise ValueError("threshold must be at least 2")
@@ -198,9 +197,9 @@ class DirectoryScanningRule(CorrelationRule):
         self.window_duration = window
 
     def subject(self, event: ECSEvent) -> Optional[str]:
-        # Only 404 (not found) matters for distinct-path scanning.
-        # 403 (forbidden) is the spec's "follow-up" hint and could be
-        # added in a future iteration as additional context.
+        # Za skeniranje po različitim putanjama bitan je samo 404 (not found).
+        # 403 (forbidden) je "prateći" nagoveštaj iz specifikacije i mogao
+        # bi se dodati u budućoj iteraciji kao dodatni kontekst.
         if event.http_response_status_code != 404:
             return None
         if event.source_ip is None:
@@ -238,25 +237,21 @@ class DirectoryScanningRule(CorrelationRule):
 
 class AccountTakeoverRule(CorrelationRule):
     """
-    Fires when a series of failed logins for a specific account from
-    one source IP is followed by a successful login for that same
-    account shortly after.
+    Okida kad niz neuspelih login-a za određeni nalog sa jedne source IP
+    bude praćen uspešnim login-om za taj isti nalog ubrzo posle.
 
-    Specification: failures followed by a success for the same
-    (source_ip, username) pair within a short window.
+    Specifikacija: neuspesi praćeni uspehom za isti (source_ip, username)
+    par unutar kratkog prozora.
 
-    Rationale: attacker guesses correctly on attempt N+1. Pure brute
-    force (failures only) misses the moment the breach succeeds; this
-    rule explicitly captures the success that follows. Per-username
-    matching prevents false positives when several legitimate users
-    happen to share an IP (NAT, office gateway) — three of them
-    typing typos while a fourth logs in normally is not ATO.
+    Ideja: napadač pogodi iz N+1. pokušaja. Čist brute force (samo neuspesi)
+    propušta trenutak kad proboj uspe; ovo pravilo eksplicitno hvata uspeh
+    koji sledi. Uparivanje po username-u sprečava lažne alarme kad više
+    legitimnih korisnika deli istu IP (NAT, kancelarijski gateway) - kad
+    troje kucaju greškom, a četvrti se normalno uloguje, to nije ATO.
 
-    Implementation: subject() accepts BOTH auth failures and auth
-    successes for the same source IP, so the window holds the full
-    sequence. evaluate() fires on a success when at least
-    `failure_threshold` failures FOR THAT USERNAME preceded it within
-    the window.
+    Implementacija: subject() prima I neuspehe I uspehe za istu source IP,
+    pa prozor drži ceo niz. evaluate() okida na uspeh kad mu je unutar
+    prozora prethodilo bar `failure_threshold` neuspeha ZA TAJ USERNAME.
     """
     name = "account_takeover"
     severity = IncidentSeverity.CRITICAL
@@ -265,8 +260,8 @@ class AccountTakeoverRule(CorrelationRule):
     def __init__(
         self,
         *,
-        failure_threshold: int = 3,
-        window: timedelta = timedelta(minutes=5),
+        failure_threshold: int = 5,
+        window: timedelta = timedelta(minutes=10),
     ):
         if failure_threshold < 1:
             raise ValueError("failure_threshold must be at least 1")
@@ -278,7 +273,7 @@ class AccountTakeoverRule(CorrelationRule):
             return None
         if event.source_ip is None:
             return None
-        # Both successes and failures relevant; mapping decides outcome.
+        # Bitni su i uspesi i neuspesi; ishod je već odredio mapper.
         if event.event_outcome not in (
             EventOutcome.SUCCESS.value, EventOutcome.FAILURE.value,
         ):
@@ -288,14 +283,14 @@ class AccountTakeoverRule(CorrelationRule):
     def evaluate(
         self, window: SlidingWindow, event: ECSEvent,
     ) -> Optional[Incident]:
-        # Only a success triggers; otherwise we just accumulate state.
+        # Okida samo uspeh; inače samo nakupljamo stanje.
         if event.event_outcome != EventOutcome.SUCCESS.value:
             return None
 
-        # Per-username matching: ATO requires failed attempts AND the
-        # successful login to target the same account. Without this,
-        # three different users typo-ing their password while a fourth
-        # logs in legitimately would trigger a false-positive ATO.
+        # Uparivanje po username-u: ATO traži da i neuspeli pokušaji I
+        # uspešan login ciljaju isti nalog. Bez ovoga, troje ljudi koji
+        # pogreše šifru dok se četvrti legitimno uloguje bi okinuli
+        # lažan ATO.
         target_user = event.user_name
         if target_user is None:
             return None

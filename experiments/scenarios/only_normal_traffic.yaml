@@ -1,12 +1,12 @@
 name: only_normal_traffic
 description: |
-  Control group: legitimate users only, no attack. The SIEM must NOT
-  generate any incidents. Any incident here counts as a False Positive
-  for the Precision metric.
+  Kontrolna grupa: samo legitimni korisnici, bez napada. SIEM NE sme da
+  napravi nijedan incident. Svaki incident ovde je False Positive za
+  Precision metriku.
 
-  Validates the per-user matching fix in the account_takeover rule
-  (Week 8) — without that fix, three users typo-ing their passwords
-  while a fourth logs in normally was triggering an ATO incident.
+  Potvrđuje ispravku uparivanja po korisniku u account_takeover pravilu
+  - bez nje, tri korisnika koja pogreše šifru dok se četvrti normalno
+  uloguje su okidali lažan ATO incident.
 
 expected_incidents: []
 

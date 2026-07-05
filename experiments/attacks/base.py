@@ -1,12 +1,12 @@
 """
-Common building blocks for attack-simulation scripts.
+Zajednički delovi za skripte simulacije napada.
 
-Provides:
-    - HttpClient: thin wrapper over requests with sane defaults
-    - GroundTruthRecorder: append-only event log written as JSON to disk
-    - Argparse helpers shared across scripts
+Nudi:
+    - HttpClient: tanak omotač oko requests sa razumnim podrazumevanim vrednostima
+    - GroundTruthRecorder: append-only dnevnik događaja upisan kao JSON na disk
+    - Argparse pomoćnike zajedničke svim skriptama
 
-Each attack script imports these instead of duplicating boilerplate.
+Svaka attack skripta ovo uvozi umesto da duplira isti kod.
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ import requests
 # ============================================
 
 def setup_logging(name: str, level: str = "INFO") -> logging.Logger:
-    """Format logs as a single line so console output is greppable."""
+    """Formatiraj log kao jednu liniju, da se konzolni izlaz lako grep-uje."""
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(logging.Formatter(
         "%(asctime)s [%(levelname)s] %(message)s",
@@ -51,11 +51,10 @@ def setup_logging(name: str, level: str = "INFO") -> logging.Logger:
 
 class HttpClient:
     """
-    Wraps requests.Session with a base URL and per-request error tolerance.
+    Omotava requests.Session sa baznim URL-om i tolerancijom na greške.
 
-    Attack scripts should NOT crash on a single 4xx — that is often the
-    point of the attack. This client logs the response and returns it,
-    instead of raise_for_status.
+    Attack skripte NE smeju da padnu na jedan 4xx - to je često i poenta
+    napada. Ovaj klijent zabeleži odgovor i vrati ga.
     """
 
     def __init__(
@@ -71,9 +70,9 @@ class HttpClient:
         self._timeout = timeout_seconds
         self._session = requests.Session()
         self._session.headers["User-Agent"] = user_agent
-        # Distributed-attack simulation: when targeting the webapp directly
-        # (bypassing Nginx), the X-Forwarded-For header is the only signal
-        # the webapp uses to determine the source IP.
+        # Simulacija distribuiranog napada: kad gađamo webapp direktno
+        # (zaobilazeći Nginx), X-Forwarded-For header je jedini signal
+        # koji webapp koristi da odredi source IP.
         if spoof_ip:
             self._session.headers["X-Forwarded-For"] = spoof_ip
         self._log = logger or logging.getLogger(__name__)
@@ -121,7 +120,7 @@ class HttpClient:
 
 @dataclass
 class GroundTruthAction:
-    """A single thing the attack script did, with timestamp."""
+    """Jedna stvar koju je attack skripta uradila, sa vremenom."""
     timestamp: str
     action: str         # "failed_login", "404_probe", "successful_login", ...
     target: Optional[str] = None
@@ -131,19 +130,19 @@ class GroundTruthAction:
 
 @dataclass
 class GroundTruthExpectation:
-    """What the attack expects the SIEM to detect."""
+    """Šta napad očekuje da SIEM detektuje."""
     rule: str           # "brute_force", "directory_scanning", "account_takeover"
     severity: str
-    min_count: int = 1  # Minimum number of incidents matching this rule
+    min_count: int = 1  # Minimalan broj incidenata koji odgovaraju ovom pravilu
 
 
 @dataclass
 class GroundTruthRun:
     """
-    Persisted as JSON in experiments/runs/<run_id>.json.
+    Čuva se kao JSON u experiments/runs/<run_id>.json.
 
-    Used downstream by compute_metrics.py (Week 11) to evaluate
-    Precision, Recall, and F1.
+    Nizvodno ga koristi compute_metrics.py za računanje Precision,
+    Recall i F1.
     """
     run_id: str
     scenario: str
@@ -157,13 +156,13 @@ class GroundTruthRun:
 
 class GroundTruthRecorder:
     """
-    Append-only recorder. Flushes to disk on close().
+    Append-only recorder. Upisuje na disk pri close().
 
-    Usage:
+    Upotreba:
         recorder = GroundTruthRecorder(scenario="brute_force_basic", ...)
         recorder.expect(rule="brute_force", severity="high")
         recorder.action("failed_login", target="alice", status_code=401)
-        recorder.close()  # writes runs/<id>.json
+        recorder.close()  # upiše runs/<id>.json
     """
 
     def __init__(
@@ -223,7 +222,7 @@ class GroundTruthRecorder:
 # ============================================
 
 def add_common_args(parser: argparse.ArgumentParser) -> None:
-    """Flags every attack script accepts."""
+    """Flagovi koje prihvata svaka attack skripta."""
     parser.add_argument(
         "--target-url",
         default=os.environ.get("ATTACK_TARGET_URL", "http://localhost:8080"),
@@ -256,12 +255,12 @@ def _iso_now() -> str:
 
 
 def _default_runs_dir() -> Path:
-    """Resolve experiments/runs relative to the experiments/ folder."""
+    """Nađi experiments/runs u odnosu na experiments/ folder."""
     return Path(__file__).resolve().parent.parent / "runs"
 
 
 def sleep_with_jitter(base: float, jitter_factor: float = 0.2) -> None:
-    """Sleep for `base` seconds +/- jitter, to avoid robotic timing."""
+    """Spavaj `base` sekundi +/- jitter, da tajming ne bude robotski."""
     import random
     jitter = base * jitter_factor
     actual = max(0, base + random.uniform(-jitter, jitter))

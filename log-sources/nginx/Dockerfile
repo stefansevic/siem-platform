@@ -1,19 +1,20 @@
 FROM nginx:1.27-alpine
 
-# Remove default Nginx config
+# Ukloni podrazumevanu Nginx konfiguraciju
 RUN rm /etc/nginx/conf.d/default.conf
 
-# Disable the default access_log directive in main nginx.conf
-# so only our siem_combined directive in conf.d/default.conf logs requests
+# Ugasi podrazumevani access_log u glavnom nginx.conf, da zahteve loguje
+# samo naš siem_combined format iz conf.d/default.conf
 RUN sed -i 's|access_log\s*/var/log/nginx/access.log\s*main;|# &|' /etc/nginx/nginx.conf
 
-# Replace symlinks (access.log -> /dev/stdout, error.log -> /dev/stderr)
-# with real files so the SIEM Ingestor can tail them.
+# Nginx slika po defaultu symlinkuje access.log -> /dev/stdout i
+# error.log -> /dev/stderr. Menjamo ih pravim fajlovima da bi SIEM
+# Ingestor mogao da ih tail-uje iz deljenog volume-a.
 RUN rm -f /var/log/nginx/access.log /var/log/nginx/error.log \
     && touch /var/log/nginx/access.log /var/log/nginx/error.log \
     && chown -R nginx:nginx /var/log/nginx
 
-# Copy our custom config
+# Ubaci našu konfiguraciju
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80

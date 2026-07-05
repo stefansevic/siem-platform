@@ -1,21 +1,17 @@
 name: distributed_brute_force
 description: |
-  Distributed brute-force: 5 attacker IPs each try 4 failed logins
-  against 'admin'. Total of 20 failed authentications targeting the
-  same account, but no individual IP exceeds the brute_force threshold
-  (5 within 60s).
+  Distribuirani brute-force: 5 napadačkih IP, svaka po 4 neuspeha na
+  'admin'. Ukupno 20 neuspeha na isti nalog, ali nijedna IP ne prelazi
+  brute_force prag (5 u 60s).
 
-  The SIEM is expected to NOT detect this as an attack — brute_force
-  rule groups by source IP, not by username. This is a documented
-  limitation in Chapter 7 (Future work).
+  SIEM NE treba da detektuje ovo - brute_force grupiše po source IP, ne
+  po username-u. Dokumentovana mana (budući rad).
 
-  Mitigations discussed in the thesis: aggregate per-username rules,
-  global rate-limiters, or behavioral baselines that flag rare
-  failure-success patterns regardless of IP.
+  Rešenja iz rada: pravila po username-u, globalni rate-limiteri, ili
+  behavior baseline koji hvata redak obrazac neuspeh-uspeh bez obzira na IP.
 
-  Note: The traffic is sent directly to the webapp (port 9000) so
-  the X-Forwarded-For header carries the spoofed attacker IP. Going
-  through Nginx (port 8080) would have Nginx rewrite the header.
+  Napomena: saobraćaj ide direktno na webapp (port 9000), pa X-Forwarded-For
+  nosi lažiranu napadačku IP. Kroz Nginx (8080) bi Nginx prepisao header.
 
 expected_incidents: []
 

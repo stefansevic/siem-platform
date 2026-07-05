@@ -1,5 +1,5 @@
-# Experiment suite configuration.
-# Maps scenario name (without .yaml extension) to number of runs.
+# Konfiguracija serije eksperimenata.
+# Mapira ime scenarija (bez .yaml) na broj ponavljanja.
 runs_per_scenario:
   basic_brute_force: 10
   basic_dir_scan: 10

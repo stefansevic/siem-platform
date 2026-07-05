@@ -1,8 +1,8 @@
 """
-Unit tests for parser functions.
+Unit testovi za parser funkcije.
 
-Sample lines below are real captures from the Redis stream during
-end-to-end testing in week 2.
+Primeri linija ispod su stvarno uhvaćeni iz Redis stream-a tokom
+end-to-end testiranja.
 """
 
 from __future__ import annotations
@@ -49,7 +49,7 @@ class TestNginxParser:
         assert result.http_status == 200
         assert result.user_agent == "curl/7.81.0"
         assert result.event_type == "http_request"
-        assert result.outcome is None  # Nginx parser does not infer outcome
+        assert result.outcome is None  # Nginx parser ne zaključuje ishod
         assert result.user_name is None
 
     def test_parses_post_login_failure(self):
@@ -103,7 +103,7 @@ class TestNginxParser:
             parse_nginx_siem_combined("this is not an nginx log line")
 
     def test_garbage_status_does_not_match(self):
-        # Status must be exactly 3 digits, otherwise full regex fails.
+        # Status mora biti tačno 3 cifre, inače ceo regex ne prolazi.
         line = (
             '1.1.1.1 - - [27/Apr/2026:10:00:00 +0000] "GET / HTTP/1.1" 99 0 '
             '"-" "curl" rt=0.001 uct="-" uht="-" urt="-"'
@@ -165,7 +165,7 @@ class TestWebappJsonParser:
         assert result.event_type == "authentication"
         assert result.outcome == "success"
         assert result.user_name == "admin"
-        # session_id should be in extras
+        # session_id treba da bude u extras
         assert "session_id" in result.extras
 
     def test_parses_http_request(self):
@@ -211,7 +211,7 @@ class TestWebappJsonParser:
             parse_demo_webapp_json('{"timestamp": "not a date"}')
 
     def test_unknown_event_type_does_not_raise(self):
-        """Parser is permissive — unknown event_types pass through."""
+        """Parser je popustljiv - nepoznati event_type-ovi prolaze."""
         payload = (
             '{"timestamp": "2026-04-27T10:00:00+00:00", '
             '"event_type": "future_unknown_type"}'

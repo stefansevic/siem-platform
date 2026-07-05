@@ -1,14 +1,14 @@
 """
-Log Ingestor service.
+Ingestor - ulazna tačka sistema za logove.
 
-Responsibilities:
-- Receive JSON log events via HTTP POST /logs (push from applications).
-- Tail Nginx access.log in real time (pull from filesystem).
-- Forward all received logs to the Redis stream `raw_logs`.
+Šta radi:
+- Prima JSON logove preko HTTP POST /logs (PUSH).
+- Tail-uje Nginx access.log u realnom vremenu (PULL).
+- Sve primljene logove prosleđuje u Redis stream `raw_logs`.
 
-The Ingestor is intentionally "dumb": it does NOT parse, normalize, or
-filter the payload. Doing nothing complex keeps it fast, reliable, and
-easy to scale horizontally.
+Namerno je "glup": ne parsira, ne normalizuje i ne filtrira sadržaj.
+Time ostaje brz i pouzdan. 
+Sva "pamet" (parsiranje, normalizacija) je posao Normalizera .
 """
 
 import asyncio
@@ -30,7 +30,7 @@ from .redis_publisher import RedisPublisher
 
 
 # ============================================
-# Structured JSON logging (same approach as demo-webapp)
+# JSON logovanje (isti pristup kao demo-webapp)
 # ============================================
 
 class _JSONFormatter(logging.Formatter):
@@ -53,7 +53,7 @@ logger = logging.getLogger("ingestor")
 
 
 # ============================================
-# Lifespan: setup and teardown
+# Životni ciklus: pokretanje i gašenje
 # ============================================
 
 publisher = RedisPublisher()
@@ -64,8 +64,8 @@ tailer_task: asyncio.Task | None = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
-    Initialize Redis publisher and start Nginx tailer on startup.
-    Cleanly stop everything on shutdown.
+    Na startu: poveži Redis publisher i pokreni Nginx tailer.
+    Na gašenju: zaustavi sve.
     """
     global tailer, tailer_task
 
@@ -97,7 +97,7 @@ async def lifespan(app: FastAPI):
 
 
 # ============================================
-# FastAPI application
+# FastAPI aplikacija
 # ============================================
 
 app = FastAPI(
@@ -108,33 +108,32 @@ app = FastAPI(
 )
 
 
-# ----- Health -----
+# ----- Provera zdravlja servisa -----
 
 @app.get("/health")
 async def health():
     return {"status": "ok", "service": "ingestor"}
 
 
-# ----- Push endpoint: accept JSON logs from applications -----
+# ----- Push endpoint: prima JSON logove od aplikacija -----
 
 @app.post("/logs", status_code=status.HTTP_202_ACCEPTED)
 async def receive_log(request: Request):
     """
-    Accepts a JSON body and forwards it to the `raw_logs` stream.
+    Prima JSON telo i prosleđuje ga u `raw_logs` stream.
 
-    Request body: any valid JSON object. The Ingestor does not enforce
-    a schema -- the Normalizer is responsible for parsing.
+    Telo: bilo koji validan JSON objekat. Ingestor ne proverava šemu,
+    to je posao Normalizera.
 
-    Headers:
-        X-Log-Source: optional override of the log source identifier.
-                      Defaults to "demo-webapp" when not provided.
+    Header X-Log-Source: opciono govori odakle log dolazi.
+    Ako ga nema, podrazumeva se "demo-webapp".
     """
     try:
         body_bytes = await request.body()
         if not body_bytes:
             raise HTTPException(status_code=400, detail="Empty body")
 
-        # Re-serialize to ensure we store a clean, single-line JSON string
+        # Preserijalizuj da dobijemo čist, jednolinijski JSON string
         try:
             parsed = json.loads(body_bytes)
         except json.JSONDecodeError as exc:
@@ -155,7 +154,7 @@ async def receive_log(request: Request):
 
         entry_id = await publisher.publish_raw_log(message)
         if entry_id is None:
-            # Publishing failed; surface 503 so caller can retry
+            # Objavljivanje palo; vrati 503 da pozivalac može da pokuša ponovo
             raise HTTPException(status_code=503, detail="Failed to enqueue log")
 
         return {"accepted": True, "stream_entry_id": entry_id}
@@ -167,11 +166,11 @@ async def receive_log(request: Request):
         raise HTTPException(status_code=500, detail="Internal error")
 
 
-# ----- Stats endpoint (handy for debugging) -----
+# ----- Stats endpoint (zgodno za debug) -----
 
 @app.get("/stats")
 async def stats():
-    """Reports basic operational state of the ingestor."""
+    """Vraća osnovno operativno stanje ingestora."""
     return {
         "service": "ingestor",
         "redis_host": settings.redis_host,

@@ -1,9 +1,9 @@
 name: brute_force_with_noise
 description: |
-  Brute-force attack against admin while legitimate users are actively
-  using the application. Tests that the SIEM distinguishes the attack
-  from background traffic — only one brute_force incident should fire,
-  and no false positives should appear from the normal flow.
+  Brute-force napad na admin dok legitimni korisnici aktivno koriste
+  aplikaciju. Testira da SIEM razlikuje napad od pozadinskog saobraćaja
+  - treba da okine tačno jedan brute_force incident, bez lažnih alarma
+  od normalnog toka.
 
 expected_incidents:
   - rule: brute_force

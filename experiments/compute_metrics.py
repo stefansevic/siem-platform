@@ -1,16 +1,16 @@
 """
-Compute Precision, Recall, F1 for SIEM detection runs.
+Računa Precision, Recall, F1 za SIEM detekcione run-ove.
 
-Reads ground-truth JSON files from experiments/runs/. Each file is
-expected to contain both `expected` and `actual_incidents` (populated
-by run_scenario.py at the end of each run, before the next reset).
+Čita ground-truth JSON fajlove iz experiments/runs/. Svaki fajl treba
+da sadrži i `expected` i `actual_incidents` (koje run_scenario.py upiše
+na kraju svakog run-a, pre sledećeg reset-a).
 
-Outputs:
-    experiments/results/per_run.jsonl     — one line per run with full detail
-    experiments/results/per_rule.csv      — Precision/Recall/F1 per rule
-    experiments/results/per_scenario.csv  — mean ± std per scenario
+Izlazi:
+    experiments/results/per_run.jsonl     - jedna linija po run-u, pun detalj
+    experiments/results/per_rule.csv      - Precision/Recall/F1 po pravilu
+    experiments/results/per_scenario.csv  - srednja +/- std po scenariju
 
-Usage:
+Upotreba:
     python compute_metrics.py
     python compute_metrics.py --runs-dir experiments/runs --output-dir experiments/results
 """
@@ -38,7 +38,7 @@ class RunMetrics:
     started_at: str
     ended_at: str
     expected: dict[str, int]    # rule_name -> min_count
-    detected: dict[str, int]    # rule_name -> count of incidents
+    detected: dict[str, int]    # rule_name -> broj incidenata
     tp: int
     fp: int
     fn: int
@@ -48,7 +48,7 @@ class RunMetrics:
 
 
 def load_runs(runs_dir: Path) -> list[dict[str, Any]]:
-    """Load every *.json under runs_dir. Skips files that fail to parse."""
+    """Učitaj svaki *.json iz runs_dir. Preskače fajlove koji ne mogu da se parsiraju."""
     runs = []
     for path in sorted(runs_dir.glob("*.json")):
         try:
@@ -60,7 +60,7 @@ def load_runs(runs_dir: Path) -> list[dict[str, Any]]:
 
 
 def compute_run_metrics(run: dict[str, Any]) -> RunMetrics:
-    """Match expected vs actual_incidents at rule_name level with min_count."""
+    """Uporedi expected sa actual_incidents na nivou rule_name, uz min_count."""
     expected: dict[str, int] = {}
     for exp in run.get("expected", []):
         rule = exp["rule"]
@@ -70,6 +70,7 @@ def compute_run_metrics(run: dict[str, Any]) -> RunMetrics:
     for inc in run.get("actual_incidents", []):
         detected[inc["rule_name"]] += 1
 
+# prebrojimo TP i FN
     tp = 0
     fn = 0
     for rule, min_count in expected.items():
@@ -79,16 +80,17 @@ def compute_run_metrics(run: dict[str, Any]) -> RunMetrics:
         else:
             fn += 1
 
+
+# sad prebrojimo FP
     fp = 0
     for rule in detected:
         if rule not in expected:
             fp += 1
 
-    # Negative scenarios (expected={}) with no detections are perfect:
-    # treat absence of FP as Precision=1.0.
+
     if not expected:
         precision = 1.0 if fp == 0 else 0.0
-        recall = 1.0  # nothing to miss
+        recall = 1.0  # nema šta da se propusti
     else:
         precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
         recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
@@ -115,7 +117,7 @@ def compute_run_metrics(run: dict[str, Any]) -> RunMetrics:
 
 
 def aggregate_per_rule(runs: list[RunMetrics]) -> list[dict[str, Any]]:
-    """Sum TP/FP/FN per rule across all runs and recompute Precision/Recall/F1."""
+    """Saberi TP/FP/FN po pravilu kroz sve run-ove i ponovo izračunaj P/R/F1."""
     totals: dict[str, dict[str, int]] = defaultdict(
         lambda: {"tp": 0, "fp": 0, "fn": 0}
     )
@@ -150,7 +152,7 @@ def aggregate_per_rule(runs: list[RunMetrics]) -> list[dict[str, Any]]:
 
 
 def aggregate_per_scenario(runs: list[RunMetrics]) -> list[dict[str, Any]]:
-    """Compute mean and std of P/R/F1 per scenario across its runs."""
+    """Izračunaj srednju vrednost i std P/R/F1 po scenariju kroz njegove run-ove."""
     by_scenario: dict[str, list[RunMetrics]] = defaultdict(list)
     for run in runs:
         by_scenario[run.scenario].append(run)

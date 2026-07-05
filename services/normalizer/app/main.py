@@ -1,16 +1,16 @@
 """
-Normalizer service entry point.
+Ulazna tačka Normalizer servisa.
 
-Lifecycle:
-    1. Parse Settings (fails fast if env is incomplete).
-    2. Configure JSON logging.
-    3. Connect EventWriter to Postgres.
-    4. Connect NormalizerConsumer to Redis (creates group if needed).
-    5. Run the consumer loop until SIGINT/SIGTERM.
-    6. Stop loop, close Redis and Postgres in reverse order.
+Životni ciklus:
+    1. Učitaj Settings (odmah pukne ako env nije kompletan).
+    2. Podesi JSON logovanje.
+    3. Poveži EventWriter na Postgres.
+    4. Poveži NormalizerConsumer na Redis (napravi grupu ako treba).
+    5. Vrti consumer petlju dosta je degraded .
+    6. Zaustavi petlju, zatvori Redis pa Postgres (obrnutim redom).
 
-The service does NOT expose HTTP; it is a pure background worker.
-Health is observable via Postgres/Redis connectivity and stream lag.
+Servis NE izlaže HTTP; čisto je pozadinski radnik. Zdravlje se vidi
+kroz konekciju sa Postgres/Redis i zaostajanje stream-a.
 """
 
 from __future__ import annotations
@@ -59,8 +59,8 @@ async def run_service() -> None:
     )
     await writer.connect()
 
-    # Apply the index template once ES is reachable. Idempotent:
-    # subsequent restarts do nothing if the template already exists.
+    # Primeni index template kad je ES dostupan. Idempotentno:
+    # naredni restart ne radi ništa ako template već postoji.
     if writer._es is not None:
         from shared.elasticsearch_index import (
             TEMPLATE_NAME,

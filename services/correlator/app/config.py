@@ -1,8 +1,6 @@
 """
-Centralized configuration for the Correlator service.
+Centralizovana konfiguracija Correlator servisa.
 
-Pydantic Settings validates env vars at startup, so missing values
-produce a clear error before the service tries to talk to Redis.
 """
 
 from __future__ import annotations
@@ -26,8 +24,8 @@ class Settings(BaseSettings):
     # ----- Logging -----
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
 
-    # ----- Correlation rule thresholds -----
-    # Defaults match the project specification (PDF section 4.1).
+    # ----- Pragovi korelacionih pravila -----
+    # Podrazumevane vrednosti prate projektnu specifikaciju.
     brute_force_threshold: int = Field(default=5, alias="BRUTE_FORCE_THRESHOLD")
     brute_force_window_seconds: int = Field(
         default=60, alias="BRUTE_FORCE_WINDOW_SECONDS"

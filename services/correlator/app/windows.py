@@ -1,23 +1,19 @@
 """
-Sliding window data structure for correlation rules.
+SlidingWindow drži niz (timestamp, event) unosa i automatski izbacuje
+one starije od svoje podešene dužine trajanja.
 
-A SlidingWindow holds a sequence of (timestamp, event) entries and
-automatically evicts entries older than its configured duration.
+Struktura je namerno generička: ne zna šta je "event". Pravila prave
+jedan prozor po (pravilo, subjekat) paru - npr. jedan SlidingWindow
+neuspelih login-a po source IP za brute-force pravilo.
 
-The structure is intentionally generic: it does not know what an "event"
-is. Rules instantiate one window per (rule, subject) pair — for example,
-one SlidingWindow of failure events per source IP for the brute-force
-rule.
-
-Design notes:
-    * deque is used for O(1) append and O(1) popleft, which fits the
-      "newest at one end, oldest at the other" access pattern.
-    * Eviction is lazy: it happens at the start of every add() and
-      every count() call. Idle subjects do not retain memory until
-      they are accessed; an explicit prune() helper exists for the
-      engine's periodic cleanup pass.
-    * Time is passed in by the caller (no datetime.now() inside) so
-      tests can advance time deterministically.
+Napomene o dizajnu:
+    * deque zbog O(1) append i O(1) popleft, što odgovara pristupu
+      "najnovije na jednom kraju, najstarije na drugom".
+    * Izbacivanje je lenjo: dešava se na početku svakog add(). Prozori
+      neaktivnih subjekata se čiste tek eksplicitnim prune()-om, koji
+      engine poziva periodično.
+    * Vreme dolazi spolja (nema datetime.now() unutra), pa testovi mogu
+      deterministički da pomeraju vreme.
 """
 
 from __future__ import annotations
@@ -30,42 +26,38 @@ from typing import Any, Callable, Iterable, Iterator, Optional
 
 @dataclass(frozen=True)
 class WindowEntry:
-    """One entry in a sliding window."""
+    """Jedan unos u kliznom prozoru."""
     timestamp: datetime
-    event: Any  # Whatever the rule needs to retain (ECSEvent, dict, etc.)
+    event: Any  # šta god pravilu treba da zadrži (ECSEvent, dict, itd.)
 
 
 class SlidingWindow:
     """
-    A bounded-time deque of events.
+    Deque događaja ograničen vremenom.
 
-    Args:
-        duration: how far back from "now" the window keeps entries.
-                  Entries older than (now - duration) are evicted.
     """
 
     def __init__(self, duration: timedelta):
         if duration.total_seconds() <= 0:
             raise ValueError("duration must be positive")
-        self._duration = duration
+        self._duration = duration # koliko unazad prozor pamti (npr. 60s)
         self._entries: deque[WindowEntry] = deque()
 
     # ----- Mutators -----
 
     def add(self, timestamp: datetime, event: Any) -> None:
         """
-        Append an entry; evict any entries that have aged out relative
-        to the new entry's timestamp. The newest entry's timestamp is
-        treated as "now" so windows advance with stream time, not
-        wall-clock time.
+        Dodaj unos; izbaci one koji su istekli u odnosu na timestamp
+        novog unosa. Timestamp najnovijeg unosa se tretira kao "sada",
+        pa prozor napreduje po vremenu iz stream-a, ne po zidnom satu.
         """
         self._evict_older_than(timestamp - self._duration)
         self._entries.append(WindowEntry(timestamp, event))
 
     def prune(self, now: datetime) -> int:
         """
-        Force eviction relative to the given `now`. Returns the number
-        of entries removed. Used by the engine's periodic cleanup pass.
+        Prinudno izbaci unose u odnosu na dato `now`. Vraća broj
+        izbačenih unosa. Koristi ga engine u periodičnom čišćenju.
         """
         before = len(self._entries)
         self._evict_older_than(now - self._duration)
@@ -78,23 +70,22 @@ class SlidingWindow:
 
     def count(self, predicate: Optional[Callable[[Any], bool]] = None) -> int:
         """
-        Return the number of entries currently in the window.
-        If a predicate is given, only entries whose event satisfies it
-        are counted. The window is NOT pruned by this call — counts
-        reflect whatever has been added; explicit prune() should be
-        used if external callers want stale-free counts.
+        Vraća broj unosa trenutno u prozoru. Ako je dat predikat,
+        broje se samo unosi čiji event ga zadovoljava. Ovaj poziv NE
+        čisti prozor - broj odražava sve što je dodato; za "sveže"
+        brojanje treba eksplicitno pozvati prune().
         """
         if predicate is None:
             return len(self._entries)
         return sum(1 for e in self._entries if predicate(e.event))
 
     def events(self) -> Iterator[Any]:
-        """Iterate over events (without timestamps), oldest first."""
+        """Prolazi kroz događaje (bez timestamp-a), od najstarijeg."""
         for entry in self._entries:
             yield entry.event
 
     def entries(self) -> Iterable[WindowEntry]:
-        """Iterate over (timestamp, event) entries, oldest first."""
+        """Prolazi kroz (timestamp, event) unose, od najstarijeg."""
         return tuple(self._entries)
 
     def first_timestamp(self) -> Optional[datetime]:
@@ -116,6 +107,6 @@ class SlidingWindow:
     # ----- Internal -----
 
     def _evict_older_than(self, cutoff: datetime) -> None:
-        """Pop entries whose timestamp is strictly less than cutoff."""
+        """Izbaci unose čiji je timestamp strogo manji od cutoff-a."""
         while self._entries and self._entries[0].timestamp < cutoff:
             self._entries.popleft()

@@ -1,13 +1,13 @@
 """
-Integration tests for db.EventWriter against a live Postgres container.
+Integracioni testovi za db.EventWriter protiv živog Postgres kontejnera.
 
-These tests are slower than the pure-function tests and require:
-    - Postgres reachable via POSTGRES_* environment variables
-    - The schema from migrations/001 + 002 already applied
+Sporiji su od testova čiste logike i traže:
+    - Postgres dostupan preko POSTGRES_* environment varijabli
+    - Šemu iz migracija 001 + 002 već primenjenu
 
-To run only fast unit tests:    pytest -m "not integration"
-To run only DB integration:     pytest -m integration
-To run everything:              pytest
+Samo brzi unit testovi:      pytest -m "not integration"
+Samo DB integracija:         pytest -m integration
+Sve:                         pytest
 """
 
 from __future__ import annotations
@@ -34,14 +34,14 @@ pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 @pytest_asyncio.fixture
 async def writer():
     """
-    Yield a connected EventWriter, clean up the events table afterwards
-    so tests stay isolated.
+    Vrati povezan EventWriter, pa posle očisti events tabelu, da testovi
+    ostanu izolovani.
     """
     dsn = build_dsn(host=os.environ.get("POSTGRES_HOST_TEST", "localhost"))
     w = EventWriter(dsn)
     await w.connect()
 
-    # Wipe events written by previous test runs that share idempotency_key
+    # Obriši događaje iz prethodnih test pokretanja sa istim idempotency_key
     async with w._engine.begin() as conn:  # type: ignore[attr-defined]
         await conn.execute(text(
             "DELETE FROM events WHERE idempotency_key LIKE 'test-%'"
@@ -81,8 +81,8 @@ class TestEventWriter:
         assert inserted is True
 
     async def test_duplicate_insert_returns_false(self, writer: EventWriter):
-        # Two events with different IDs but the SAME idempotency_key.
-        # The second insert must collapse into a no-op.
+        # Dva događaja sa različitim ID-jem ali ISTIM idempotency_key.
+        # Drugi insert mora da se svede na no-op.
         event_a = _sample_event(id=uuid4())
         event_b = _sample_event(id=uuid4())
 
@@ -109,7 +109,7 @@ class TestEventWriter:
         assert row.source_ip == "172.18.0.1"
 
     async def test_event_with_no_source_ip(self, writer: EventWriter):
-        """Lifecycle-style events have no source_ip; insert must still succeed."""
+        """Lifecycle-tip događaja nema source_ip; insert svejedno mora da uspe."""
         event = _sample_event(source_ip=None, user_name=None,
                               event_outcome=EventOutcome.SUCCESS)
         inserted = await writer.insert_event(event, idempotency_key="test-004")

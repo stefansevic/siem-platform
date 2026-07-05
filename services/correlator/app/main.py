@@ -1,14 +1,13 @@
 """
-Correlator service entry point.
+Ulazna tačka Correlator servisa.
 
-Lifecycle:
-    1. Parse Settings.
-    2. Configure JSON logging.
-    3. Build the CorrelationEngine with all three rules, parameters
-       sourced from Settings (so thresholds can be retuned without
-       a code change).
-    4. Connect CorrelatorConsumer to Redis.
-    5. Run the read loop until SIGINT/SIGTERM.
+Životni ciklus:
+    1. Učitaj Settings.
+    2. Podesi JSON logovanje.
+    3. Napravi CorrelationEngine sa sva tri pravila, parametri dolaze iz
+       Settings-a (pa se pragovi menjaju bez promene koda).
+    4. Poveži CorrelatorConsumer na Redis.
+    5. Vrti read petlju do SIGINT/SIGTERM.
 """
 
 from __future__ import annotations

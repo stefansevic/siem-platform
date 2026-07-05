@@ -1,13 +1,12 @@
 """
-Maps ParsedFields (source-neutral parser output) to ECSEvent (canonical
-schema persisted in the events table).
+Prevodi ParsedFields u ECSEvent
+(kanonska šema koja se čuva u events tabeli).
 
-This module owns the business logic of how raw events are categorized
-and how outcomes are inferred when the source does not state them
-explicitly (e.g., Nginx access logs have no notion of success/failure
-but we derive it from the HTTP status code).
+Ovde je logika kako se događaji kategorizuju i kako se ishod zaključuje
+kad ga izvor ne kaže eksplicitno (npr. Nginx access log ne zna za
+uspeh/neuspeh, pa ga izvodimo iz HTTP status koda).
 
-Like parsers, this module is I/O-free.
+Kao i parseri, ovaj modul je bez I/O.
 """
 
 from __future__ import annotations
@@ -36,29 +35,26 @@ from app.parsers import (
 # ============================================
 
 class MappingError(ValueError):
-    """Raised when a parsed event cannot be turned into an ECSEvent."""
+    """Diže se kad parsiran događaj ne može da postane ECSEvent."""
 
 
 class SkipEvent(Exception):
     """
-    Raised when an event is intentionally not persisted.
+    Diže se kad događaj namerno NE čuvamo.
 
-    Examples: webapp lifecycle events, healthcheck noise.
-    The Normalizer treats this as a non-error: ack the message and move on.
+    Primeri: webapp lifecycle događaji, šum od healthcheck-a.
+    Normalizer to tretira kao ne-grešku: samo potvrdi poruku i idi dalje.
     """
 
 
 def normalize(raw: RawLogMessage) -> ECSEvent:
-    """
-    Full pipeline: raw payload (string) -> parsed fields -> ECSEvent.
 
-    Raises:
-        ParseError: payload is malformed for its declared format.
-        SkipEvent:  parsed correctly but should not be persisted.
-        MappingError: parsed but mapping rules cannot produce an ECSEvent.
-    """
-    fields = _dispatch_parser(raw)
-    return _to_ecs(fields, raw)
+#redis_consumer poziva ovu funkciju za svaki sirovi log koji je Ingestor poslao.
+
+    fields = _dispatch_parser(raw) # sirovo -> ParsedFields
+    return _to_ecs(fields, raw) # ParsedFields -> ECSEvent
+
+
 
 
 # ============================================
@@ -66,10 +62,14 @@ def normalize(raw: RawLogMessage) -> ECSEvent:
 # ============================================
 
 def _dispatch_parser(raw: RawLogMessage) -> ParsedFields:
-    """Pick a parser based on the format hint attached by the Ingestor."""
+    """
+    Bira parser prema oznaci formata koju je Ingestor zakačio.
+    nginx_combined ili json.
+
+    """
+    
     fmt = raw.format
-    # `use_enum_values=True` on RawLogMessage means raw.format is a string
-    # at runtime ("nginx_combined", "json"), not a LogFormat instance.
+
     if fmt == LogFormat.NGINX_COMBINED.value or fmt == LogFormat.NGINX_COMBINED:
         return parse_nginx_siem_combined(raw.payload)
     if fmt == LogFormat.JSON.value or fmt == LogFormat.JSON:
@@ -79,13 +79,10 @@ def _dispatch_parser(raw: RawLogMessage) -> ParsedFields:
 
 def _to_ecs(fields: ParsedFields, raw: RawLogMessage) -> ECSEvent:
     """
-    Apply mapping rules to produce an ECSEvent.
+    Mapira ParsedFields u ECSEvent.
 
-    Decides:
-        - event_category from event_type (and source)
-        - event_outcome (uses parsed outcome, falls back to status code)
-        - log_source from raw.source
     """
+
     if fields.timestamp is None:
         raise MappingError("ParsedFields missing required timestamp")
 
@@ -97,7 +94,7 @@ def _to_ecs(fields: ParsedFields, raw: RawLogMessage) -> ECSEvent:
         timestamp=fields.timestamp,
         event_category=category,
         event_outcome=outcome,
-        event_action=fields.event_type,  # Keep original verb as ECS event.action
+        event_action=fields.event_type,  
         source_ip=fields.source_ip,
         user_name=fields.user_name,
         http_method=fields.http_method,
@@ -111,12 +108,9 @@ def _to_ecs(fields: ParsedFields, raw: RawLogMessage) -> ECSEvent:
 
 def _derive_category(fields: ParsedFields) -> EventCategory:
     """
-    Map event_type to ECS event.category.
+    Mapira event_type u ECS event.category. authentication | authorization | web
 
-    Webapp event_types map directly. Nginx (and other unstructured sources)
-    always fall to 'web'.
-
-    Lifecycle events are filtered upstream — they should never reach here.
+    Lifecycle (app se pokrenula, app se gasi,..) događaji se filtriraju ranije - dovde ne bi trebalo da stignu.
     """
     et = fields.event_type
 
@@ -130,26 +124,22 @@ def _derive_category(fields: ParsedFields) -> EventCategory:
     if et == "http_request":
         return EventCategory.WEB
 
-    # Unknown / missing event_type defaults to web — better than dropping.
+    # Nepoznat / nedostajući event_type ide na web.
     return EventCategory.WEB
 
 
 def _derive_outcome(fields: ParsedFields) -> Optional[EventOutcome]:
     """
-    Determine event.outcome.
+    Određuje event.outcome. (success | failure | None)
 
-    Priority:
-      1. Explicit outcome from the source (webapp authentication events)
-      2. HTTP status code heuristic (2xx/3xx success, 4xx/5xx failure)
-      3. Unknown if neither is available
     """
-    # 1. Explicit outcome
+    # 1. Eksplicitan ishod (webapp)
     if fields.outcome == "success":
         return EventOutcome.SUCCESS
     if fields.outcome == "failure":
         return EventOutcome.FAILURE
 
-    # 2. HTTP status code heuristic
+    # 2. Heuristika po HTTP status kodu (nginx)
     code = fields.http_status
     if code is not None:
         if 200 <= code < 400:
@@ -157,14 +147,13 @@ def _derive_outcome(fields: ParsedFields) -> Optional[EventOutcome]:
         if 400 <= code < 600:
             return EventOutcome.FAILURE
 
-    # 3. Nothing to go on
+    # 3. Nemamo se na šta osloniti
     return None
 
 
 def _coerce_log_source(value) -> LogSource:
     """
-    Convert raw.source (string when use_enum_values=True, enum otherwise)
-    into a proper LogSource enum.
+    Pretvara raw.source u LogSource enum.
     """
     if isinstance(value, LogSource):
         return value
