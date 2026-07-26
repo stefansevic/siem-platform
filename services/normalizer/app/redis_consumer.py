@@ -53,9 +53,10 @@ _BLOCK_MS = 5000
 # Najviše unosa po jednom XREADGROUP pozivu.
 _BATCH_COUNT = 32
 
-# Timeout vidljivosti za pale consumer-e (ms). Unos koji je pending duže
-# od ovoga sme da preuzme drugi consumer.
-_PEL_RECLAIM_MS = 60_000
+# Napomena: oporavak "pending" unosa palog consumer-a (XAUTOCLAIM) nije
+# implementiran. Za jednu instancu to nije potrebno; kod horizontalnog
+# skaliranja bi se dodao reclaim. Ranije definisan, a nekorišćen prag je
+# uklonjen da kod ne bi tvrdio nešto što ne radi.
 
 
 # ============================================
@@ -206,10 +207,13 @@ class NormalizerConsumer:
         # Korak 3: sačuvaj i objavi dalje.
         try:
             key = compute_idempotency_key(raw_msg)
-            inserted = await self._writer.insert_event(event, idempotency_key=key)
-            if inserted:
-                await self._publish_normalized(event)
-            # U oba slučaja, poruka je uspešno obrađena.
+            # Upis je idempotentan (ON CONFLICT DO NOTHING). Objavu NE vezujemo
+            # za rezultat upisa: ako je prethodni pokušaj upisao red a pao pre
+            # objave, na ponovnoj dostavi upis vraća "duplikat", ali događaj
+            # svejedno mora da stigne do korelatora. Zato UVEK objavljujemo;
+            # korelator dedupira po event.id, pa dupla objava ne udvaja brojače.
+            await self._writer.insert_event(event, idempotency_key=key)
+            await self._publish_normalized(event)
             await self._ack(entry_id)
         except Exception:
             # Prava I/O greška: NE potvrđuj, da drugi consumer proba ponovo.

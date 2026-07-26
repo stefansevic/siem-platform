@@ -4,8 +4,11 @@ Async PostgreSQL upisivač normalizovanih događaja.
 Koristi SQLAlchemy Core (ne ORM) sa asyncpg drajverom.
 
 Idempotency:
-    Svaki insert ide uz ON CONFLICT (idempotency_key) DO NOTHING.
-    Duplirani upisi postaju tihi, pa je exactly-once očuvan.
+    Svaki insert ide uz ON CONFLICT (idempotency_key) DO NOTHING, pa
+    duplirani upisi postaju tihi (idempotentan upis). Reč je o
+    idempotentnom čuvanju, ne o "exactly-once" garanciji kroz ceo sistem
+    (događaj se u normalized_events može objaviti više puta; korelator
+    dedupira po event.id).
 
 Životni ciklus konekcije:
     Normalizer napravi jedan EventWriter na startu, pozove connect() i

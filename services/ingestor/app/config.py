@@ -23,6 +23,12 @@ class Settings(BaseModel):
         "NGINX_ACCESS_LOG_PATH",
         "/var/log/nginx/access.log",
     )
+    # Perzistentni offset tailera (na zapisivom volume-u): pamti dokle je
+    # pročitano, da posle restarta ne preskoči linije nastale dok nije radio.
+    nginx_offset_path: str = os.getenv(
+        "NGINX_OFFSET_PATH",
+        "/var/lib/ingestor/nginx_access.offset",
+    )
     enable_nginx_tailer: bool = os.getenv("ENABLE_NGINX_TAILER", "true").lower() == "true"
 
     # Logovanje

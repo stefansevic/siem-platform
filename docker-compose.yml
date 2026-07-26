@@ -152,6 +152,7 @@ services:
       - "${INGESTOR_PORT}:8001"
     volumes:
       - nginx_logs:/var/log/nginx:ro
+      - ingestor_state:/var/lib/ingestor
     depends_on:
       redis:
         condition: service_healthy
@@ -272,3 +273,4 @@ volumes:
   redis_data:
   nginx_logs:
   elasticsearch_data:
+  ingestor_state:

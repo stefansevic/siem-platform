@@ -170,16 +170,18 @@ class BruteForceRule(CorrelationRule):
 class DirectoryScanningRule(CorrelationRule):
     """
     Okida kad jedna source IP proba mnogo različitih putanja i dobija
-    404 odgovore, opciono praćene 403-ima.
+    404 odgovore, PRAĆENE neovlašćenim pristupom (403).
 
-    Specifikacija: > 20 različitih 404 putanja sa iste source IP unutar
-    60 sekundi.
+    Specifikacija (tačka 4.1): veliki broj 404 grešaka sa iste source IP
+    praćenih neovlašćenim pristupom (403) unutar prozora.
 
     Ideja: alati kao DirBuster/Gobuster napamet probaju česte putanje
-    tražeći skrivene endpointe. Obeležje je širok spektar RAZLIČITIH
-    putanja, ne samo visoka učestalost zahteva. Brojanje različitih URL-ova
+    tražeći skrivene endpointe (404), a zatim pokušavaju pristup
+    zaštićenom resursu (403). Obeležje je širok spektar RAZLIČITIH 404
+    putanja praćen bar jednim 403 odgovorom. Brojanje različitih URL-ova
     (umesto ukupnih 404) smanjuje lažne alarme od pogrešno podešenog
-    klijenta koji ponavlja isti pokvaren URL.
+    klijenta koji ponavlja isti pokvaren URL; uslov 403 realizuje
+    višestepeni obrazac iz specifikacije.
     """
 
     name = "directory_scanning"
@@ -197,10 +199,9 @@ class DirectoryScanningRule(CorrelationRule):
         self.window_duration = window
 
     def subject(self, event: ECSEvent) -> Optional[str]:
-        # Za skeniranje po različitim putanjama bitan je samo 404 (not found).
-        # 403 (forbidden) je "prateći" nagoveštaj iz specifikacije i mogao
-        # bi se dodati u budućoj iteraciji kao dodatni kontekst.
-        if event.http_response_status_code != 404:
+        # U prozor ulaze i 404 (skeniranje) i 403 (neovlašćen pristup koji
+        # prati skeniranje). Grupisanje je po source IP.
+        if event.http_response_status_code not in (404, 403):
             return None
         if event.source_ip is None:
             return None
@@ -211,11 +212,20 @@ class DirectoryScanningRule(CorrelationRule):
     def evaluate(
         self, window: SlidingWindow, event: ECSEvent,
     ) -> Optional[Incident]:
-        distinct_paths = {
+        distinct_404 = {
             e.url_path for e in window.events()
             if isinstance(e, ECSEvent) and e.url_path
+            and e.http_response_status_code == 404
         }
-        if len(distinct_paths) < self.threshold:
+        forbidden = [
+            e for e in window.events()
+            if isinstance(e, ECSEvent) and e.http_response_status_code == 403
+        ]
+        # Specifikacija: veliki broj različitih 404 PRAĆENIH neovlašćenim
+        # pristupom (403). Oba uslova moraju biti ispunjena.
+        if len(distinct_404) < self.threshold:
+            return None
+        if not forbidden:
             return None
 
         return self._build_incident(
@@ -225,8 +235,9 @@ class DirectoryScanningRule(CorrelationRule):
             details={
                 "threshold": self.threshold,
                 "window_seconds": int(self.window_duration.total_seconds()),
-                "distinct_paths_count": len(distinct_paths),
-                "sample_paths": sorted(distinct_paths)[:20],
+                "distinct_paths_count": len(distinct_404),
+                "forbidden_count": len(forbidden),
+                "sample_paths": sorted(distinct_404)[:20],
             },
         )
 

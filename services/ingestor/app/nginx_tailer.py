@@ -10,9 +10,11 @@ Ponašanje:
 """
 
 import asyncio
+import json
 import logging
 import os
 from pathlib import Path
+from typing import Optional
 
 from shared.ecs_models import LogFormat, LogSource, RawLogMessage
 
@@ -29,6 +31,7 @@ class NginxTailer:
     def __init__(self, publisher: RedisPublisher) -> None:
         self._publisher = publisher
         self._path = Path(settings.nginx_access_log_path)
+        self._offset_path = Path(settings.nginx_offset_path)
         self._stop_event = asyncio.Event()
 
 
@@ -66,10 +69,16 @@ class NginxTailer:
         """
 
         with open(self._path, "r", encoding="utf-8", errors="replace") as f:
-            # Skoči na kraj, da vidimo samo NOVE linije (ne ceo istorijski log)
-            f.seek(0, os.SEEK_END)
-            # Zapamti inode fajla da kasnije prepoznamo rotaciju
-            current_inode = os.fstat(f.fileno()).st_ino
+            st = os.fstat(f.fileno())
+            current_inode = st.st_ino
+            saved = self._load_offset(current_inode)
+            if saved is not None:
+                # Nastavi tamo gde smo stali - preživljava restart, ne
+                # preskače linije nastale dok tailer nije radio.
+                f.seek(min(saved, st.st_size))
+            else:
+                # Prvi put za ovaj fajl: preskoči istoriju, prati nove linije.
+                f.seek(0, os.SEEK_END)
 
             while not self._stop_event.is_set():
                 line = f.readline()
@@ -77,7 +86,8 @@ class NginxTailer:
                     await self._publish_line(line.rstrip("\n"))
                     continue
 
-                # Nema novih linija; proveri da nije fajl rotiran/zamenjen.
+                # Nema novih linija; upamti dokle smo stigli i proveri rotaciju.
+                self._save_offset(current_inode, f.tell())
                 await asyncio.sleep(0.5)
                 try:
                     new_stat = self._path.stat()
@@ -92,6 +102,27 @@ class NginxTailer:
                     logger.warning("nginx_log_disappeared_reopening")
                     return
 
+
+    def _load_offset(self, inode: int) -> Optional[int]:
+        """Učitaj sačuvani offset ako pripada istom fajlu (istom inode-u)."""
+        try:
+            data = json.loads(self._offset_path.read_text(encoding="utf-8"))
+        except (FileNotFoundError, ValueError, OSError):
+            return None
+        if data.get("inode") == inode:
+            return int(data.get("offset", 0))
+        return None
+
+    def _save_offset(self, inode: int, offset: int) -> None:
+        """Zapiši dokle je pročitano (inode + offset). Greške su nefatalne."""
+        try:
+            self._offset_path.parent.mkdir(parents=True, exist_ok=True)
+            self._offset_path.write_text(
+                json.dumps({"inode": inode, "offset": offset}),
+                encoding="utf-8",
+            )
+        except OSError:
+            logger.exception("nginx_offset_save_failed")
 
     async def _publish_line(self, line: str) -> None:
         """Objavi jednu log liniju u Redis."""

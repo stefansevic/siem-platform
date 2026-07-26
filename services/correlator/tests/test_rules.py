@@ -202,11 +202,11 @@ class TestDirectoryScanningSubject:
         ev = http_event(status=200, path="/")
         assert rule.subject(ev) is None
 
-    def test_403_returns_none(self):
-        """403 not in scope for this iteration; future enhancement."""
+    def test_403_returns_source_ip(self):
+        """403 (neovlašćen pristup) je sada deo obrasca skeniranja."""
         rule = DirectoryScanningRule()
         ev = http_event(status=403, path="/admin")
-        assert rule.subject(ev) is None
+        assert rule.subject(ev) == "1.2.3.4"
 
     def test_event_without_path_returns_none(self):
         rule = DirectoryScanningRule()
@@ -216,42 +216,62 @@ class TestDirectoryScanningSubject:
 
 
 class TestDirectoryScanningEvaluate:
-    def test_distinct_404_paths_above_threshold_fires(self):
+    def test_distinct_404_paths_followed_by_403_fires(self):
         rule = DirectoryScanningRule(threshold=10, window=timedelta(seconds=30))
         w = SlidingWindow(rule.window_duration)
         events = [
             http_event(status=404, path=f"/path-{i}", timestamp=at(i))
             for i in range(11)
-        ]
+        ] + [http_event(status=403, path="/admin", timestamp=at(11))]
         incident = feed(rule, w, events)
         assert incident is not None
         assert incident.rule_name == "directory_scanning"
         assert incident.severity == IncidentSeverity.MEDIUM.value
         assert incident.details["distinct_paths_count"] == 11
+        assert incident.details["forbidden_count"] == 1
+
+    def test_404_sweep_without_403_does_not_fire(self):
+        """Bez pratećeg 403 pravilo NE okida (višestepeni obrazac)."""
+        rule = DirectoryScanningRule(threshold=10, window=timedelta(seconds=30))
+        w = SlidingWindow(rule.window_duration)
+        events = [
+            http_event(status=404, path=f"/path-{i}", timestamp=at(i))
+            for i in range(20)
+        ]
+        assert feed(rule, w, events) is None
+
+    def test_403_without_enough_404_does_not_fire(self):
+        rule = DirectoryScanningRule(threshold=10, window=timedelta(seconds=30))
+        w = SlidingWindow(rule.window_duration)
+        events = [
+            http_event(status=404, path=f"/path-{i}", timestamp=at(i))
+            for i in range(3)
+        ] + [http_event(status=403, path="/admin", timestamp=at(3))]
+        assert feed(rule, w, events) is None
 
     def test_repeated_same_path_does_not_fire(self):
-        """11 hits but on only 1 distinct path — rule must NOT fire."""
+        """11 hits but on only 1 distinct 404 path — rule must NOT fire."""
         rule = DirectoryScanningRule(threshold=10, window=timedelta(seconds=30))
         w = SlidingWindow(rule.window_duration)
         events = [
             http_event(status=404, path="/admin", timestamp=at(i))
             for i in range(11)
-        ]
+        ] + [http_event(status=403, path="/secret", timestamp=at(11))]
         assert feed(rule, w, events) is None
 
     def test_paths_outside_window_do_not_count(self):
         rule = DirectoryScanningRule(threshold=10, window=timedelta(seconds=30))
         w = SlidingWindow(rule.window_duration)
         # 5 paths at t=0..4, then 6 paths at t=60..65; only the second group
-        # is in-window (window is 30s, so cutoff at t=65 is t=35 -> earlier
-        # group evicted).
+        # is in-window (window is 30s, so cutoff at t=66 is t=36 -> earlier
+        # group evicted). 6 fresh 404 < threshold even with a 403 present.
         events = [
             http_event(status=404, path=f"/old-{i}", timestamp=at(i))
             for i in range(5)
         ] + [
             http_event(status=404, path=f"/new-{i}", timestamp=at(60 + i))
             for i in range(6)
-        ]
+        ] + [http_event(status=403, path="/admin", timestamp=at(66))]
         assert feed(rule, w, events) is None  # only 6 fresh paths
 
     def test_sample_paths_capped_at_20(self):
@@ -260,7 +280,7 @@ class TestDirectoryScanningEvaluate:
         events = [
             http_event(status=404, path=f"/p-{i:03d}", timestamp=at(i * 0.1))
             for i in range(50)
-        ]
+        ] + [http_event(status=403, path="/admin", timestamp=at(5.1))]
         incident = feed(rule, w, events)
         assert incident is not None
         assert len(incident.details["sample_paths"]) == 20

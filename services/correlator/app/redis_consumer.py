@@ -25,6 +25,7 @@ import asyncio
 import json
 import logging
 import socket
+from collections import deque
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -45,6 +46,12 @@ logger = logging.getLogger(__name__)
 _BLOCK_MS = 5000
 _BATCH_COUNT = 32
 PRUNE_INTERVAL_SECONDS = 60
+
+# Koliko skorašnjih event.id-eva pamtimo radi deduplikacije. Dovoz je
+# "bar jednom" (at-least-once), pa isti događaj može stići više puta
+# (npr. kad Normalizer ponovi objavu posle pada). Dedup po id sprečava
+# da takav duplikat udvoji brojače u kliznim prozorima.
+_SEEN_CAP = 100_000
 
 
 class CorrelatorConsumer:
@@ -70,6 +77,9 @@ class CorrelatorConsumer:
         self._redis: Optional[aioredis.Redis] = None
         self._stop_event = asyncio.Event()
         self._last_prune_ts: Optional[datetime] = None
+        # Dedup skorašnjih event.id-eva (vidi _SEEN_CAP).
+        self._seen_ids: set[str] = set()
+        self._seen_order: deque[str] = deque()
 
     # ----- lifecycle -----
 
@@ -157,6 +167,12 @@ class CorrelatorConsumer:
             await self._ack(entry_id)
             return
 
+        # Deduplikacija: isti događaj (at-least-once dostava) preskačemo,
+        # ali svejedno potvrđujemo unos.
+        if not self._mark_seen(str(event.id)):
+            await self._ack(entry_id)
+            return
+
         # Ažuriraj prune timestamp bez obzira na ishod obrade.
         self._last_prune_ts = event.timestamp
 
@@ -171,6 +187,20 @@ class CorrelatorConsumer:
             await self._publish_incident(incident)
 
         await self._ack(entry_id)
+
+    def _mark_seen(self, event_id: str) -> bool:
+        """Vrati True ako je event.id nov; False ako je već viđen (duplikat).
+
+        Pamti se poslednjih _SEEN_CAP id-eva; najstariji ispadaju.
+        """
+        if event_id in self._seen_ids:
+            return False
+        self._seen_ids.add(event_id)
+        self._seen_order.append(event_id)
+        if len(self._seen_order) > _SEEN_CAP:
+            oldest = self._seen_order.popleft()
+            self._seen_ids.discard(oldest)
+        return True
 
     async def _ack(self, entry_id: str) -> None:
         assert self._redis is not None

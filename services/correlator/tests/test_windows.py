@@ -174,3 +174,41 @@ class TestClear:
         assert len(w) == 0
         assert list(w.events()) == []
         assert w.first_timestamp() is None
+
+# ---------------------------------------------------------------------------
+# Regresija: događaji van vremenskog redosleda (B1)
+# ---------------------------------------------------------------------------
+
+class TestOutOfOrder:
+    def test_late_event_sorted_into_place(self):
+        """Zakasneli stariji događaj se ubacuje na pravo mesto, ne na kraj."""
+        w = SlidingWindow(timedelta(seconds=60))
+        w.add(at(10), "a")
+        w.add(at(30), "c")
+        w.add(at(20), "b")  # stiže kasno, ali je vremenski između
+        # events() ide od najstarijeg
+        assert list(w.events()) == ["a", "b", "c"]
+        assert w.first_timestamp() == at(10)
+        assert w.last_timestamp() == at(30)
+
+    def test_stream_time_uses_max_timestamp(self):
+        """'Sada' je najveći viđeni timestamp; stariji događaj ne pomera granicu."""
+        w = SlidingWindow(timedelta(seconds=60))
+        w.add(at(100), "x")          # sada = 100, prozor [40, 100]
+        w.add(at(50), "y")           # unutar prozora, ostaje
+        assert w.count() == 2
+        # zakasneli događaj stariji od granice (40) mora odmah da ispadne
+        w.add(at(20), "old")
+        assert w.count() == 2
+        assert "old" not in list(w.events())
+
+    def test_first_timestamp_correct_after_out_of_order(self):
+        """first_timestamp() vraća stvarno najstariji, i posle van-redosleda."""
+        w = SlidingWindow(timedelta(seconds=120))
+        w.add(at(60), "a")
+        w.add(at(90), "b")
+        w.add(at(65), "c")
+        assert w.first_timestamp() == at(60)
+        # dodaj još stariji (unutar prozora 120s od max=90 → granica -30)
+        w.add(at(10), "d")
+        assert w.first_timestamp() == at(10)

@@ -1,8 +1,8 @@
 """
  idempotency ključevi za normalizovane događaje.
 
-Normalizer je at-least-once consumer. Da bi čuvanje bilo exactly-once,
-svaki ECSEvent nosi SHA-256 heš od trojke
+Normalizer je at-least-once consumer. Da bi čuvanje bilo idempotentno
+(duplikati se tiho preskaču), svaki ECSEvent nosi SHA-256 heš od trojke
 (source, format, payload) iz koje je nastao.
 
 """

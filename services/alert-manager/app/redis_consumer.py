@@ -7,8 +7,10 @@ deduplication, persists to Postgres, and triggers notifications.
 Failure handling:
     - Malformed envelope or invalid Incident JSON: log + ack (we cannot
       do anything useful with it; this is a Correlator bug, not ours).
-    - Database error: do NOT ack; another consumer will retry the entry
-      via XAUTOCLAIM. Notification is skipped.
+    - Database error: do NOT ack, so the entry stays pending and is
+      redelivered to this consumer on the next read. Notification is
+      skipped. (Cross-consumer reclaim via XAUTOCLAIM is not implemented;
+      it would be added for horizontal scaling.)
     - Notifier error: already isolated by CompositeNotifier; the entry
       is acked normally because persistence already succeeded.
 """

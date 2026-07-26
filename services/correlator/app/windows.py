@@ -7,8 +7,12 @@ jedan prozor po (pravilo, subjekat) paru - npr. jedan SlidingWindow
 neuspelih login-a po source IP za brute-force pravilo.
 
 Napomene o dizajnu:
-    * deque zbog O(1) append i O(1) popleft, što odgovara pristupu
-      "najnovije na jednom kraju, najstarije na drugom".
+    * Unosi se drže SORTIRANI po timestamp-u. Događaji ne moraju da stižu
+      u vremenskom redosledu (mrežno kašnjenje, preuređivanje u stream-u),
+      pa se novi unos ubacuje na pravo mesto (bisect), a ne prosto na kraj.
+      Time su izbacivanje sa početka i first_timestamp() uvek tačni.
+    * Vreme toka ("sada") je NAJVEĆI viđeni timestamp, ne poslednji dodati.
+      Tako zakasneli, stariji događaj ne pomera granicu prozora unazad.
     * Izbacivanje je lenjo: dešava se na početku svakog add(). Prozori
       neaktivnih subjekata se čiste tek eksplicitnim prune()-om, koji
       engine poziva periodično.
@@ -18,10 +22,10 @@ Napomene o dizajnu:
 
 from __future__ import annotations
 
-from collections import deque
+import bisect
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Any, Callable, Iterable, Iterator, Optional
+from typing import Any, Callable, Iterable, Iterator, List, Optional
 
 
 @dataclass(frozen=True)
@@ -33,38 +37,50 @@ class WindowEntry:
 
 class SlidingWindow:
     """
-    Deque događaja ograničen vremenom.
+    Vremenski ograničen niz događaja, sortiran po timestamp-u.
 
     """
 
     def __init__(self, duration: timedelta):
         if duration.total_seconds() <= 0:
             raise ValueError("duration must be positive")
-        self._duration = duration # koliko unazad prozor pamti (npr. 60s)
-        self._entries: deque[WindowEntry] = deque()
+        self._duration = duration  # koliko unazad prozor pamti (npr. 60s)
+        self._entries: List[WindowEntry] = []
+        self._max_ts: Optional[datetime] = None  # najveći viđeni timestamp = "sada"
 
     # ----- Mutators -----
 
     def add(self, timestamp: datetime, event: Any) -> None:
         """
-        Dodaj unos; izbaci one koji su istekli u odnosu na timestamp
-        novog unosa. Timestamp najnovijeg unosa se tretira kao "sada",
-        pa prozor napreduje po vremenu iz stream-a, ne po zidnom satu.
+        Dodaj unos na pravo mesto (po timestamp-u) i izbaci istekle.
+
+        "Sada" je najveći viđeni timestamp, pa zakasneli stariji događaj
+        ne pomera granicu prozora. Prozor napreduje po vremenu iz stream-a,
+        ne po zidnom satu.
         """
-        self._evict_older_than(timestamp - self._duration)
-        self._entries.append(WindowEntry(timestamp, event))
+        entry = WindowEntry(timestamp, event)
+        # Ubaci u sortiran niz po timestamp-u (stabilno na kraj za jednake).
+        bisect.insort(self._entries, entry, key=lambda e: e.timestamp)
+
+        if self._max_ts is None or timestamp > self._max_ts:
+            self._max_ts = timestamp
+        self._evict_older_than(self._max_ts - self._duration)
 
     def prune(self, now: datetime) -> int:
         """
         Prinudno izbaci unose u odnosu na dato `now`. Vraća broj
         izbačenih unosa. Koristi ga engine u periodičnom čišćenju.
         """
+        # "Sada" ne sme da ide unazad u odnosu na najveći viđeni timestamp.
+        if self._max_ts is not None and now < self._max_ts:
+            now = self._max_ts
         before = len(self._entries)
         self._evict_older_than(now - self._duration)
         return before - len(self._entries)
 
     def clear(self) -> None:
         self._entries.clear()
+        self._max_ts = None
 
     # ----- Inspectors -----
 
@@ -107,6 +123,13 @@ class SlidingWindow:
     # ----- Internal -----
 
     def _evict_older_than(self, cutoff: datetime) -> None:
-        """Izbaci unose čiji je timestamp strogo manji od cutoff-a."""
-        while self._entries and self._entries[0].timestamp < cutoff:
-            self._entries.popleft()
+        """Izbaci unose čiji je timestamp strogo manji od cutoff-a.
+
+        Niz je sortiran po timestamp-u, pa je dovoljno skidati sa početka.
+        """
+        idx = 0
+        n = len(self._entries)
+        while idx < n and self._entries[idx].timestamp < cutoff:
+            idx += 1
+        if idx:
+            del self._entries[:idx]
