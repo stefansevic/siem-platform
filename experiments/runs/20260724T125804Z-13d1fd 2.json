@@ -1,0 +1,16 @@
+{
+  "run_id": "20260724T125804Z-13d1fd",
+  "scenario": "slow_burst_brute_force",
+  "scenario_file": "scenarios/slow_burst_brute_force.yaml",
+  "started_at": "2026-07-24T12:56:18.198218+00:00",
+  "ended_at": "2026-07-24T12:58:04.055875+00:00",
+  "target_base_url": "http://localhost:8080",
+  "expected": [
+    {
+      "rule": "brute_force",
+      "user": "bob"
+    }
+  ],
+  "actual_incidents": [],
+  "description": "Granični slučaj kliznog prozora: 6 neuspeha razmaknutih po 16s, kroz\n90s. Prozor je 60s, pa u bilo kom prozoru ima najviše 4-5 neuspeha.\nDa li okine zavisi od tačnog tajminga kad se pravilo ponovo evaluira.\nPokazuje osetljivost korelacije sa fiksnim prozorom na tempo napada."
+}

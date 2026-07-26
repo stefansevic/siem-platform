@@ -5,8 +5,7 @@ description: |
 
 expected_incidents:
   - rule: brute_force
-    severity: high
-    min_count: 1
+    user: admin
 
 steps:
   - type: attack

@@ -1,0 +1,44 @@
+{
+  "run_id": "20260724T125817Z-6f005c",
+  "scenario": "nat_false_positive",
+  "scenario_file": "scenarios/nat_false_positive.yaml",
+  "started_at": "2026-07-24T12:58:11.709859+00:00",
+  "ended_at": "2026-07-24T12:58:17.782633+00:00",
+  "target_base_url": "http://localhost:8080",
+  "expected": [],
+  "actual_incidents": [
+    {
+      "id": "b4e6540b-9509-49ce-a378-b1290fb9e1a9",
+      "rule_name": "brute_force",
+      "rule_version": "1.0",
+      "severity": "high",
+      "first_event_at": "2026-07-24T12:58:11.867326Z",
+      "last_event_at": "2026-07-24T12:58:12.298296Z",
+      "detected_at": "2026-07-24T12:58:12.291676Z",
+      "source_ip": "172.18.0.1",
+      "target_user_name": "carol",
+      "event_count": 6,
+      "details": {
+        "threshold": 5,
+        "failure_count": 6,
+        "window_seconds": 60,
+        "distinct_usernames": [
+          "alice",
+          "bob",
+          "carol"
+        ]
+      },
+      "contributing_events": [
+        "210b8c93-d782-4d9b-a018-87fd199bc490",
+        "a16df224-b743-4a1f-a7a4-60c21212709b",
+        "2c3051d2-0951-4940-a135-a72594c49b37",
+        "596abd26-e1b5-4ab7-a6b2-ac1a8e8e3420",
+        "498ca525-7b76-48e0-b202-5c060fcac244",
+        "2b30eeb8-cc04-466b-9277-6b4c54cfc720"
+      ],
+      "status": "open",
+      "notes": null
+    }
+  ],
+  "description": "NAT false positive: 3 korisnika (alice, bob, carol) svaki 2 puta\npogreši šifru sa ISTE deljene IP. Ukupno 6 neuspeha kroz 3 naloga.\n\nbrute_force grupiše samo po source_ip (industrijski standard), pa SIEM\nOKINE iako nijedan pojedinačan nalog nije napadnut. To je dokumentovana\nNAT mana (ADR-022, budući rad). Rešenje: grupisanje po (IP, user) ili UEBA."
+}

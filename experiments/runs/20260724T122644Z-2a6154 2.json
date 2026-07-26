@@ -1,0 +1,11 @@
+{
+  "run_id": "20260724T122644Z-2a6154",
+  "scenario": "only_normal_traffic",
+  "scenario_file": "scenarios/only_normal_traffic.yaml",
+  "started_at": "2026-07-24T12:25:41.118566+00:00",
+  "ended_at": "2026-07-24T12:26:44.654772+00:00",
+  "target_base_url": "http://localhost:8080",
+  "expected": [],
+  "actual_incidents": [],
+  "description": "Kontrolna grupa: samo legitimni korisnici, bez napada. SIEM NE sme da\nnapravi nijedan incident. Svaki incident ovde je False Positive za\nPrecision metriku.\n\nPotvrđuje ispravku uparivanja po korisniku u account_takeover pravilu\n- bez nje, tri korisnika koja pogreše šifru dok se četvrti normalno\nuloguje su okidali lažan ATO incident."
+}

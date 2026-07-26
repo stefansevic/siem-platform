@@ -1,0 +1,49 @@
+{
+  "run_id": "20260724T121324Z-03834b",
+  "scenario": "basic_brute_force",
+  "scenario_file": "scenarios/basic_brute_force.yaml",
+  "started_at": "2026-07-24T12:13:19.054521+00:00",
+  "ended_at": "2026-07-24T12:13:24.668838+00:00",
+  "target_base_url": "http://localhost:8080",
+  "expected": [
+    {
+      "rule": "brute_force",
+      "user": "admin"
+    }
+  ],
+  "actual_incidents": [
+    {
+      "id": "ac65e7e4-cf28-48d7-ab17-1a2301627347",
+      "rule_name": "brute_force",
+      "rule_version": "1.0",
+      "severity": "high",
+      "first_event_at": "2026-07-24T12:13:19.180174Z",
+      "last_event_at": "2026-07-24T12:13:21.392880Z",
+      "detected_at": "2026-07-24T12:13:20.449262Z",
+      "source_ip": "172.18.0.1",
+      "target_user_name": "admin",
+      "event_count": 8,
+      "details": {
+        "threshold": 5,
+        "failure_count": 8,
+        "window_seconds": 60,
+        "distinct_usernames": [
+          "admin"
+        ]
+      },
+      "contributing_events": [
+        "81492fba-00f7-4f5c-bc6b-7e8def38d53c",
+        "91a8a427-6c1c-4904-82f2-b3a685722f7b",
+        "016aba3d-eaf2-47e9-a77a-25e1d3f32684",
+        "26286f71-ba28-4ca2-8b8e-1581d04efacc",
+        "15405d64-5c13-45ef-a9ab-fae8e7f4bdc8",
+        "99dca255-8ea7-4960-b512-21aebd6355ef",
+        "e06bd9e3-689b-4f3e-9070-6bc7ca2d41cb",
+        "95009f13-8eac-4d83-8e0b-3c696d21d141"
+      ],
+      "status": "open",
+      "notes": null
+    }
+  ],
+  "description": "Prost brute-force napad na jedan nalog, bez pozadinskog šuma.\nProvera da brute_force pravilo okine i da incident prođe ceo pipeline."
+}

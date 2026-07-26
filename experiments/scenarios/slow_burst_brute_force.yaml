@@ -5,7 +5,9 @@ description: |
   Da li okine zavisi od tačnog tajminga kad se pravilo ponovo evaluira.
   Pokazuje osetljivost korelacije sa fiksnim prozorom na tempo napada.
 
-expected_incidents: []
+expected_incidents:
+  - rule: brute_force
+    user: bob
 
 steps:
   - type: attack

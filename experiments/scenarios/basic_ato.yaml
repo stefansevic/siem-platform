@@ -5,11 +5,9 @@ description: |
 
 expected_incidents:
   - rule: brute_force
-    severity: high
-    min_count: 1
+    user: alice
   - rule: account_takeover
-    severity: critical
-    min_count: 1
+    user: alice
 
 steps:
   - type: attack

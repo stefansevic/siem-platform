@@ -1,15 +1,15 @@
 name: low_and_slow
 description: |
-  Low-and-slow napad: 4 neuspeha razvučena kroz 60 sekundi. Usporeni
-  pokušaji ostaju ispod brute_force praga (5 neuspeha u 60s). SIEM NE
-  sme da ovo detektuje kao napad - to je očekivana mana pravila
-  zasnovanih na pragu.
+  Low-and-slow napad: 8 neuspelih pokušaja razvučenih na po 20 sekundi
+  (ukupno ~140s). Reč je o stvarnom napadu (8 neuspeha je jasno napad),
+  ali su pokušaji namerno razmaknuti tako da nijedan 60-sekundni prozor
+  ne sadrži 5 pokušaja. Detekcija zasnovana na fiksnom pragu i prozoru
+  ovo PROPUSTA, pa je očekivani ishod False Negative. Scenario kvantifikuje
+  poznato ograničenje (v. poglavlje 5.8 i pravce daljeg razvoja).
 
-  Dokumentovano kao poznat False Negative (budući rad). Moguća rešenja:
-  ML detekcija, dinamički baseline (u stilu Datadog-a), ili duži prozori
-  agregacije sa nižim pragom.
-
-expected_incidents: []
+expected_incidents:
+  - rule: brute_force
+    user: alice
 
 steps:
   - type: attack
@@ -18,9 +18,9 @@ steps:
       - --username
       - alice
       - --attempts
-      - "4"
+      - "8"
       - --delay
-      - "15"
+      - "20"
 
   - type: wait
     seconds: 5

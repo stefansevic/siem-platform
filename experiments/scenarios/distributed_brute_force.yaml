@@ -13,7 +13,9 @@ description: |
   Napomena: saobraćaj ide direktno na webapp (port 9000), pa X-Forwarded-For
   nosi lažiranu napadačku IP. Kroz Nginx (8080) bi Nginx prepisao header.
 
-expected_incidents: []
+expected_incidents:
+  - rule: brute_force
+    user: admin
 
 steps:
   - type: parallel

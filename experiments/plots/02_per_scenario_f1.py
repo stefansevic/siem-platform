@@ -23,9 +23,6 @@ from _common import load_runs, setup_style, ensure_output_dir
 
 
 def _f1(run) -> float:
-    if not run.expected:
-        # Negative scenario: 0 detected = perfect, any FP = 0
-        return 1.0 if run.fp == 0 else 0.0
     p = run.tp / (run.tp + run.fp) if (run.tp + run.fp) > 0 else 0.0
     r = run.tp / (run.tp + run.fn) if (run.tp + run.fn) > 0 else 0.0
     return 2 * p * r / (p + r) if (p + r) > 0 else 0.0
@@ -35,8 +32,13 @@ def main() -> None:
     setup_style()
     runs = load_runs()
 
+    # Samo napadacki scenariji imaju smislen F1. Kontrolni scenariji
+    # (bez ocekivanog napada) se mere brojem laznih alarma (tabela u radu i
+    # matrica konfuzije), ne F1 merom - da se izbegne obmanjujuci F1=1.
     by_scenario: dict[str, list[float]] = defaultdict(list)
     for run in runs:
+        if not run.expected:
+            continue
         by_scenario[run.scenario].append(_f1(run))
 
     # Sort: best F1 first, ties broken alphabetically
@@ -63,7 +65,7 @@ def main() -> None:
     ax.set_yticks(y)
     ax.set_yticklabels(scenarios)
     ax.set_xlabel("F1 score (mean ± std)")
-    ax.set_title("Per-scenario F1 across all runs")
+    ax.set_title("Per-scenario F1 (attack scenarios)")
     ax.set_xlim(0, 1.1)
     ax.invert_yaxis()  # best on top
 

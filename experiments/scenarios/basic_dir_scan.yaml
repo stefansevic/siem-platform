@@ -5,8 +5,6 @@ description: |
 
 expected_incidents:
   - rule: directory_scanning
-    severity: medium
-    min_count: 1
 
 steps:
   - type: attack

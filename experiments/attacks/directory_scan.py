@@ -143,7 +143,30 @@ def main() -> int:
 
         sleep_with_jitter(delay)
 
-    log.info("Done: %d/%d responses were 404", not_found, len(paths))
+    # Višestepeni obrazac iz specifikacije: nakon skeniranja (404), napadač
+    # pokušava neovlašćen pristup zaštićenom resursu, koji vraća 403.
+    forbidden = 0
+    for protected in ("/admin", "/profile"):
+        try:
+            resp = client.get(protected)
+        except Exception as exc:
+            log.error("GET %s failed: %s", protected, exc)
+            sleep_with_jitter(delay)
+            continue
+        log.info("GET %s -> %d", protected, resp.status_code)
+        if recorder:
+            recorder.action(
+                "forbidden_probe", target=protected,
+                status_code=resp.status_code,
+            )
+        if resp.status_code == 403:
+            forbidden += 1
+        sleep_with_jitter(delay)
+
+    log.info(
+        "Done: %d/%d responses were 404, %d were 403",
+        not_found, len(paths), forbidden,
+    )
 
     if recorder:
         path_out = recorder.close()
