@@ -22,9 +22,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY shared/ ./shared/
 COPY services/ingestor/app/ ./app/
 
-# Pokreni kao non-root korisnik (bezbednije)
+# Pokreni kao non-root korisnik (bezbednije). Direktorijum za stanje
+# tailera mora postojati i pripadati tom korisniku pre nego što se na
+# njega montira volume, inače tailer ne može da upiše offset.
 RUN useradd --create-home --shell /bin/bash appuser \
-    && chown -R appuser:appuser /app
+    && mkdir -p /var/lib/ingestor \
+    && chown -R appuser:appuser /app /var/lib/ingestor
 USER appuser
 
 EXPOSE 8001

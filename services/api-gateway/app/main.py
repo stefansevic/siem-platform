@@ -631,7 +631,7 @@ async def list_rules() -> List[RuleDTO]:
         ),
         RuleDTO(
             name="directory_scanning",
-            description="20 or more distinct 404 paths probed from the same source IP within 60 seconds, indicating automated resource enumeration.",
+            description="20 or more distinct 404 paths probed from the same source IP within 60 seconds, together with at least one 403 response. The 403 confirms the scan reached a resource that exists but is protected, which separates deliberate enumeration from ordinary broken links.",
             severity="medium",
             threshold=20,
             window_seconds=60,

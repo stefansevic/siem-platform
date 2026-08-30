@@ -38,21 +38,12 @@ logger = logging.getLogger(__name__)
 # ============================================
 
 class Notifier(ABC):
-    """Abstract base for incident notifiers."""
+    """Abstract base for incident notifiers. (nasledjuje se samo)"""
 
     @abstractmethod
     async def notify(self, incident: Incident, *, was_merged: bool) -> None:
         """
         Deliver one incident notification.
-
-        Args:
-            incident: the incident, after dedup. For UPDATE actions this
-                      is the merged result (with combined event_count
-                      and contributing_events).
-            was_merged: True if this notification represents an update
-                        to an existing incident, False if it is a fresh
-                        insert. Receivers may choose to suppress merge
-                        notifications if they only want the initial alert.
         """
 
 
@@ -96,18 +87,8 @@ class ConsoleNotifier(Notifier):
 
 class WebhookNotifier(Notifier):
     """
-    POSTs the incident as JSON to a configured URL.
-
-    Failure handling:
-        Connection errors, non-2xx responses, and timeouts are logged
-        but never raised. The Alert Manager must keep moving even if
-        the receiving system is down — incidents are persisted in
-        Postgres regardless of webhook delivery.
-
-    Lifecycle:
-        The httpx.AsyncClient is created lazily on first notify() call
-        and reused for the lifetime of the notifier. close() should be
-        called on shutdown to release the connection pool.
+    alje incident spoljnom sistemu (Slack, Discord, Teams,...).
+    Ne koristimo ga, napravili smo ga ako bismo hteli da prosirimo app kasnije.
     """
 
     DEFAULT_TIMEOUT_SECONDS = 5.0
@@ -167,11 +148,10 @@ class WebhookNotifier(Notifier):
 
 class CompositeNotifier(Notifier):
     """
-    Dispatches each incident to every registered notifier concurrently.
+    CompositeNotifier — objedinjuje više obaveštavača u jedan.
+    Alert Manager poziva samo njega i ne zna ko je sve unutra,
+    - mi imamo samo jednog clana koji radi (console), pa i nije bas nesto kompozitan.
 
-    A failing notifier does not affect the others: each is awaited under
-    its own try/except and exceptions are logged. This keeps the Alert
-    Manager loop running even when one downstream is misbehaving.
     """
 
     def __init__(self, notifiers: List[Notifier]):

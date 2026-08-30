@@ -1,0 +1,47 @@
+{
+  "run_id": "20260724T125219Z-75b47a",
+  "scenario": "slow_burst_brute_force",
+  "scenario_file": "scenarios/slow_burst_brute_force.yaml",
+  "started_at": "2026-07-24T12:50:48.979303+00:00",
+  "ended_at": "2026-07-24T12:52:19.407242+00:00",
+  "target_base_url": "http://localhost:8080",
+  "expected": [
+    {
+      "rule": "brute_force",
+      "user": "bob"
+    }
+  ],
+  "actual_incidents": [
+    {
+      "id": "6f0c17df-dc7f-4a9f-9a12-44f7f436ebc7",
+      "rule_name": "brute_force",
+      "rule_version": "1.0",
+      "severity": "high",
+      "first_event_at": "2026-07-24T12:50:49.122487Z",
+      "last_event_at": "2026-07-24T12:52:01.313263Z",
+      "detected_at": "2026-07-24T12:51:44.262510Z",
+      "source_ip": "172.18.0.1",
+      "target_user_name": "bob",
+      "event_count": 5,
+      "details": {
+        "threshold": 5,
+        "failure_count": 5,
+        "window_seconds": 60,
+        "distinct_usernames": [
+          "bob"
+        ]
+      },
+      "contributing_events": [
+        "5f7d2f78-8dff-4abc-aad7-53bebd7b27d6",
+        "b2b49a74-a34d-49a9-9a3e-25492aa032fc",
+        "b3fe4ea1-0cf8-4121-a118-f70c5c5c438c",
+        "a60eaade-b39d-4784-ba2a-c87da20e29fd",
+        "05fbae36-b59d-4216-bfac-8105688c574a",
+        "e706d579-66c9-4b77-ab8d-d285351b6b49"
+      ],
+      "status": "open",
+      "notes": null
+    }
+  ],
+  "description": "Granični slučaj kliznog prozora: 6 neuspeha razmaknutih po 16s, kroz\n90s. Prozor je 60s, pa u bilo kom prozoru ima najviše 4-5 neuspeha.\nDa li okine zavisi od tačnog tajminga kad se pravilo ponovo evaluira.\nPokazuje osetljivost korelacije sa fiksnim prozorom na tempo napada."
+}

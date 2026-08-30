@@ -40,6 +40,9 @@ class ParsedFields:
 class ParseError(ValueError):
     """Diže se kad izabrani parser ne može da obradi payload."""
 
+# ============================================
+# Parser za nginx logove
+# ============================================
 
 _NGINX_SIEM_COMBINED_RE = re.compile(
     r'^(?P<remote_addr>\S+)\s+'

@@ -1,0 +1,16 @@
+{
+  "run_id": "20260724T124722Z-a7a4f6",
+  "scenario": "distributed_brute_force",
+  "scenario_file": "scenarios/distributed_brute_force.yaml",
+  "started_at": "2026-07-24T12:47:15.936805+00:00",
+  "ended_at": "2026-07-24T12:47:22.944324+00:00",
+  "target_base_url": "http://localhost:8080",
+  "expected": [
+    {
+      "rule": "brute_force",
+      "user": "admin"
+    }
+  ],
+  "actual_incidents": [],
+  "description": "Distribuirani brute-force: 5 napadačkih IP, svaka po 4 neuspeha na\n'admin'. Ukupno 20 neuspeha na isti nalog, ali nijedna IP ne prelazi\nbrute_force prag (5 u 60s).\n\nSIEM NE treba da detektuje ovo - brute_force grupiše po source IP, ne\npo username-u. Dokumentovana mana (budući rad).\n\nRešenja iz rada: pravila po username-u, globalni rate-limiteri, ili\nbehavior baseline koji hvata redak obrazac neuspeh-uspeh bez obzira na IP.\n\nNapomena: saobraćaj ide direktno na webapp (port 9000), pa X-Forwarded-For\nnosi lažiranu napadačku IP. Kroz Nginx (8080) bi Nginx prepisao header."
+}

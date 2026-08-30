@@ -172,7 +172,7 @@ class DirectoryScanningRule(CorrelationRule):
     Okida kad jedna source IP proba mnogo različitih putanja i dobija
     404 odgovore, PRAĆENE neovlašćenim pristupom (403).
 
-    Specifikacija (tačka 4.1): veliki broj 404 grešaka sa iste source IP
+    veliki broj 404 grešaka sa iste source IP
     praćenih neovlašćenim pristupom (403) unutar prozora.
 
     Ideja: alati kao DirBuster/Gobuster napamet probaju česte putanje
@@ -221,7 +221,7 @@ class DirectoryScanningRule(CorrelationRule):
             e for e in window.events()
             if isinstance(e, ECSEvent) and e.http_response_status_code == 403
         ]
-        # Specifikacija: veliki broj različitih 404 PRAĆENIH neovlašćenim
+        # veliki broj različitih 404 PRAĆENIH neovlašćenim
         # pristupom (403). Oba uslova moraju biti ispunjena.
         if len(distinct_404) < self.threshold:
             return None
@@ -251,7 +251,7 @@ class AccountTakeoverRule(CorrelationRule):
     Okida kad niz neuspelih login-a za određeni nalog sa jedne source IP
     bude praćen uspešnim login-om za taj isti nalog ubrzo posle.
 
-    Specifikacija: neuspesi praćeni uspehom za isti (source_ip, username)
+    neuspesi praćeni uspehom za isti (source_ip, username)
     par unutar kratkog prozora.
 
     Ideja: napadač pogodi iz N+1. pokušaja. Čist brute force (samo neuspesi)

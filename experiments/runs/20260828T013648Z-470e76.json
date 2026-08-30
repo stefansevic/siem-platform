@@ -1,0 +1,81 @@
+{
+  "run_id": "20260828T013648Z-470e76",
+  "scenario": "basic_ato",
+  "scenario_file": "scenarios/basic_ato.yaml",
+  "started_at": "2026-08-28T01:36:44.021246+00:00",
+  "ended_at": "2026-08-28T01:36:48.660115+00:00",
+  "target_base_url": "http://localhost:8080",
+  "expected": [
+    {
+      "rule": "brute_force",
+      "user": "alice"
+    },
+    {
+      "rule": "account_takeover",
+      "user": "alice"
+    }
+  ],
+  "actual_incidents": [
+    {
+      "id": "32820718-c465-4701-a81d-ef13ee6e29d9",
+      "rule_name": "account_takeover",
+      "rule_version": "1.0",
+      "severity": "critical",
+      "first_event_at": "2026-08-28T01:36:44.128921Z",
+      "last_event_at": "2026-08-28T01:36:45.615871Z",
+      "detected_at": "2026-08-28T01:36:45.629769Z",
+      "source_ip": "192.168.65.1",
+      "target_user_name": "alice",
+      "event_count": 6,
+      "details": {
+        "window_seconds": 600,
+        "failure_threshold": 5,
+        "attempted_usernames": [
+          "alice"
+        ],
+        "successful_user_name": "alice",
+        "preceding_failure_count": 5
+      },
+      "contributing_events": [
+        "c667f629-9d64-46a5-a298-b48b83a3e42b",
+        "5e7d3e15-d911-4758-bce3-a87c45deb480",
+        "e4d0f72d-e506-486c-894b-aa995cdf5947",
+        "14c5c919-331d-4018-a47e-cfd144050f50",
+        "59856717-d36a-4aa3-ac8b-4580f2b307e0",
+        "0870d92f-f916-4d99-80fe-e1910d953055"
+      ],
+      "status": "open",
+      "notes": null
+    },
+    {
+      "id": "73d2dbbf-2fa6-4316-821d-87e28787d46e",
+      "rule_name": "brute_force",
+      "rule_version": "1.0",
+      "severity": "high",
+      "first_event_at": "2026-08-28T01:36:44.128921Z",
+      "last_event_at": "2026-08-28T01:36:45.320770Z",
+      "detected_at": "2026-08-28T01:36:45.331405Z",
+      "source_ip": "192.168.65.1",
+      "target_user_name": "alice",
+      "event_count": 5,
+      "details": {
+        "threshold": 5,
+        "failure_count": 5,
+        "window_seconds": 60,
+        "distinct_usernames": [
+          "alice"
+        ]
+      },
+      "contributing_events": [
+        "c667f629-9d64-46a5-a298-b48b83a3e42b",
+        "5e7d3e15-d911-4758-bce3-a87c45deb480",
+        "e4d0f72d-e506-486c-894b-aa995cdf5947",
+        "14c5c919-331d-4018-a47e-cfd144050f50",
+        "59856717-d36a-4aa3-ac8b-4580f2b307e0"
+      ],
+      "status": "open",
+      "notes": null
+    }
+  ],
+  "description": "Account-takeover scenario: 5 neuspeha praćenih uspehom za isti nalog.\nOčekuje se da okinu i brute_force i account_takeover pravila."
+}

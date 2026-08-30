@@ -1,0 +1,49 @@
+{
+  "run_id": "20260724T123414Z-732b20",
+  "scenario": "brute_force_with_noise",
+  "scenario_file": "scenarios/brute_force_with_noise.yaml",
+  "started_at": "2026-07-24T12:33:40.606410+00:00",
+  "ended_at": "2026-07-24T12:34:14.030901+00:00",
+  "target_base_url": "http://localhost:8080",
+  "expected": [
+    {
+      "rule": "brute_force",
+      "user": "admin"
+    }
+  ],
+  "actual_incidents": [
+    {
+      "id": "17f63bea-3da1-452a-b226-3db0d6e66cbf",
+      "rule_name": "brute_force",
+      "rule_version": "1.0",
+      "severity": "high",
+      "first_event_at": "2026-07-24T12:33:40.737358Z",
+      "last_event_at": "2026-07-24T12:33:51.135405Z",
+      "detected_at": "2026-07-24T12:33:46.886498Z",
+      "source_ip": "172.18.0.1",
+      "target_user_name": "admin",
+      "event_count": 8,
+      "details": {
+        "threshold": 5,
+        "failure_count": 8,
+        "window_seconds": 60,
+        "distinct_usernames": [
+          "admin"
+        ]
+      },
+      "contributing_events": [
+        "5dcc5add-b001-4af6-8011-48633c98cc41",
+        "c26b1f1b-1752-4212-8f91-494d0d8e129c",
+        "62b960f0-752d-4da5-8ae8-45274283f477",
+        "663f727b-2e28-49c8-9456-84aa113822b5",
+        "79723137-4cee-442e-b566-1ac951a4d096",
+        "2d4ac116-1743-4ed7-a58a-a98d503fa3c2",
+        "dbad507a-010a-4cc3-9e9b-ab7e16bae095",
+        "2c5a477c-d345-409b-b7bb-b894a1ebcc49"
+      ],
+      "status": "open",
+      "notes": null
+    }
+  ],
+  "description": "Brute-force napad na admin dok legitimni korisnici aktivno koriste\naplikaciju. Testira da SIEM razlikuje napad od pozadinskog saobraćaja\n- treba da okine tačno jedan brute_force incident, bez lažnih alarma\nod normalnog toka."
+}

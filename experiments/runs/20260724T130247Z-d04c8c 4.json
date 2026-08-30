@@ -1,0 +1,49 @@
+{
+  "run_id": "20260724T130247Z-d04c8c",
+  "scenario": "mixed_legitimate_and_attack",
+  "scenario_file": "scenarios/mixed_legitimate_and_attack.yaml",
+  "started_at": "2026-07-24T13:02:12.308930+00:00",
+  "ended_at": "2026-07-24T13:02:47.767161+00:00",
+  "target_base_url": "http://localhost:8080",
+  "expected": [
+    {
+      "rule": "brute_force",
+      "user": "admin"
+    }
+  ],
+  "actual_incidents": [
+    {
+      "id": "78a46c34-ee1c-40a5-ae85-6bbf5edad0d1",
+      "rule_name": "brute_force",
+      "rule_version": "1.0",
+      "severity": "high",
+      "first_event_at": "2026-07-24T13:02:12.442502Z",
+      "last_event_at": "2026-07-24T13:02:14.731789Z",
+      "detected_at": "2026-07-24T13:02:13.802643Z",
+      "source_ip": "172.18.0.1",
+      "target_user_name": "admin",
+      "event_count": 8,
+      "details": {
+        "threshold": 5,
+        "failure_count": 8,
+        "window_seconds": 60,
+        "distinct_usernames": [
+          "admin"
+        ]
+      },
+      "contributing_events": [
+        "5098b32e-dc46-4008-9454-46ac12ef8e8d",
+        "b5a832d0-f035-4d07-b67d-fdfc23cf7858",
+        "baa429b1-2033-4884-8448-f18c96c6d119",
+        "7eadf4fa-cf9f-47ba-8e26-873fd5add1a9",
+        "d8093980-7413-4078-8580-bf6114312e8d",
+        "46f4e07e-d661-4d25-8151-4c231fd78ada",
+        "d8a72b9f-6131-4f01-9861-9a700eef1ecd",
+        "1d83e85a-1892-452e-b166-16bc7784c492"
+      ],
+      "status": "open",
+      "notes": null
+    }
+  ],
+  "description": "Realističan mešani scenario: brute_force napad ide paralelno sa\nlegitimnim saobraćajem (3 korisnika na različitim lažiranim IP).\n\nSIEM treba da detektuje brute_force na admin (TP) i da NE napravi\nnijedan drugi incident iz šuma. Potvrđuje da legitiman saobraćaj ne\nokida lažni directory_scanning ni account_takeover."
+}

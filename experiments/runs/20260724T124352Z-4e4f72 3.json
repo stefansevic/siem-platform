@@ -1,0 +1,16 @@
+{
+  "run_id": "20260724T124352Z-4e4f72",
+  "scenario": "low_and_slow",
+  "scenario_file": "scenarios/low_and_slow.yaml",
+  "started_at": "2026-07-24T12:41:17.518889+00:00",
+  "ended_at": "2026-07-24T12:43:52.503928+00:00",
+  "target_base_url": "http://localhost:8080",
+  "expected": [
+    {
+      "rule": "brute_force",
+      "user": "alice"
+    }
+  ],
+  "actual_incidents": [],
+  "description": "Low-and-slow napad: 8 neuspelih pokušaja razvučenih na po 20 sekundi\n(ukupno ~140s). Reč je o stvarnom napadu (8 neuspeha je jasno napad),\nali su pokušaji namerno razmaknuti tako da nijedan 60-sekundni prozor\nne sadrži 5 pokušaja. Detekcija zasnovana na fiksnom pragu i prozoru\novo PROPUSTA, pa je očekivani ishod False Negative. Scenario kvantifikuje\npoznato ograničenje (v. poglavlje 5.8 i pravce daljeg razvoja)."
+}

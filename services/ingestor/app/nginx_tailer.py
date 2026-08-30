@@ -73,16 +73,16 @@ class NginxTailer:
             current_inode = st.st_ino
             saved = self._load_offset(current_inode)
             if saved is not None:
-                # Nastavi tamo gde smo stali - preživljava restart, ne
-                # preskače linije nastale dok tailer nije radio.
+                # seekuj kraj liste, prvi neprocitani log objavi u stream
                 f.seek(min(saved, st.st_size))
             else:
-                # Prvi put za ovaj fajl: preskoči istoriju, prati nove linije.
+                # preskoči istoriju, prati nove linije.
                 f.seek(0, os.SEEK_END)
 
             while not self._stop_event.is_set():
                 line = f.readline()
                 if line:
+                    #objavi liniju u stream
                     await self._publish_line(line.rstrip("\n"))
                     continue
 
